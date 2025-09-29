@@ -18,6 +18,20 @@ This serves as a template for a code-only mod using BepInEx.
 - Run `dotnet build` to build the mod
 - Copy the resulting dll from `bin/Debug/net46` to your `BepInEx/plugins` folder
 
+Before publishing your mod, make sure to change **all** occurences of "ExampleMod" to your mod name and change the **GUID** in `Main.cs` to a new one (you can generate one [here](https://www.guidgen.com/)).
+
+```bash
+$ grep -ri ExampleMode
+create_version_info.py:namespace ExampleMod {{
+Main.cs:namespace ExampleMod
+Main.cs:    public class ExampleModPlugin : BaseUnityPlugin
+Main.cs:        public const string pluginName = "ExampleMod";
+Main.csproj:    <AssemblyName>ExampleMod</AssemblyName>
+Patches.cs:namespace ExampleMod
+README.md:Before publishing your mod, make sure to change all occurences of "ExampleMod" to your mod name.
+```
+
+
 ## Release a new Version
 
 Just create a new git tag and push it to GitHub. The workflow will build the release automatically.
