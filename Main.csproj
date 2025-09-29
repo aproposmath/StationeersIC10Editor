@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net46</TargetFramework>
+    <AssemblyName>ExampleMod</AssemblyName>
+    <Description>Example code-only mod for Stationeers</Description>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>latest</LangVersion>
+    <Deterministic>true</Deterministic>
+    <PathMap>$(MSBuildProjectDirectory)=.</PathMap>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <EnableSourceControlManagerQueries>false</EnableSourceControlManagerQueries>
+  </PropertyGroup>
+  <!-- Remove and add VersionInfo.cs to avoid missing it on first build and duplicate compilation on subsequent builds -->
+  <ItemGroup>
+    <Compile Remove="VersionInfo.cs"/>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="VersionInfo.cs"/>
+  </ItemGroup>
+  <Target Name="GetVersionFromPython" BeforeTargets="BeforeBuild">
+    <Exec Command="python3 create_version_info.py"/>
+    <ReadLinesFromFile File="version.txt">
+      <Output TaskParameter="Lines" PropertyName="VersionString"/>
+    </ReadLinesFromFile>
+  </Target>
+  <ItemGroup>
+    <PackageReference Include="Krafs.Publicizer" Version="2.3.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="UnityEngine.Modules" Version="2021.2.3" IncludeAssets="compile"/>
+    <PackageReference Include="BepInEx.Analyzers" Version="1.*" PrivateAssets="all"/>
+    <PackageReference Include="BepInEx.Core" Version="5.*"/>
+    <PackageReference Include="BepInEx.PluginInfoProps" Version="1.*"/>
+    <Publicize Include="Assembly-CSharp"/>
+    <Reference Include="Unity.TextMeshPro">
+      <HintPath>libs/Unity.TextMeshPro.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UniTask">
+      <HintPath>libs/UniTask.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>libs/Newtonsoft.Json.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="netstandard">
+      <HintPath>libs/netstandard.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="netstandard">
+      <HintPath>libs/UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>libs/Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework.TrimEnd(`0123456789`))' == 'net'">
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.2" PrivateAssets="all"/>
+  </ItemGroup>
+  <PropertyGroup>
+    <Version>$(VersionString)</Version>
+  </PropertyGroup>
+</Project>

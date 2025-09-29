@@ -1,0 +1,54 @@
+name: Build and Release Mod
+
+on:
+  push:
+    branches:
+     - main
+    tags:
+     - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: RageAgainstThePixel/setup-steamcmd@v1
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - run: steamcmd +login anonymous +sDepotDownloadFileFilter "*.dll" +app_update 600760 -beta beta validate +quit
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build project
+        run: |
+          cp $STEAM_DIR/steamapps/common/Stationeers\ Dedicated\ Server/rocketstation_DedicatedServer_Data/Managed/*.dll ./libs
+          dotnet build --configuration Release Main.csproj
+
+      - name: Find compiled DLL
+        if: github.ref_type == 'tag'
+        id: find_dll
+        run: |
+          DLL_PATH=$(find ./bin/Release -type f -name '*.dll' | head -n 1)
+          echo "dll_path=$DLL_PATH" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          files: ${{ steps.find_dll.outputs.dll_path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
