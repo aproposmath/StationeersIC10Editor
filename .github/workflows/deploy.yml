@@ -4,6 +4,7 @@ on:
   push:
     branches:
      - main
+     - dev
     tags:
      - 'v*'
 
@@ -28,12 +29,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Restore dependencies
-        run: dotnet restore
-
       - name: Build project
         run: |
-          cp $STEAM_DIR/steamapps/common/Stationeers\ Dedicated\ Server/rocketstation_DedicatedServer_Data/Managed/*.dll ./libs
+          export STATIONEERS_DLL_DIR="$STEAM_DIR/steamapps/common/Stationeers Dedicated Server/rocketstation_DedicatedServer_Data/Managed"
+          dotnet restore
           dotnet build --configuration Release Main.csproj
 
       - name: Find compiled DLL

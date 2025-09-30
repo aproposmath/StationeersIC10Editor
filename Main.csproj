@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk" InitialTargets="PrintPaths">
+  <Import Project="Main.props" Condition="Exists('Main.props')"/>
   <PropertyGroup>
+    <MSBuildVerbosity>normal</MSBuildVerbosity>
     <TargetFramework>net46</TargetFramework>
     <AssemblyName>ExampleMod</AssemblyName>
     <Description>Example code-only mod for Stationeers</Description>
@@ -35,27 +37,27 @@
     <PackageReference Include="BepInEx.PluginInfoProps" Version="1.*"/>
     <Publicize Include="Assembly-CSharp"/>
     <Reference Include="Unity.TextMeshPro">
-      <HintPath>libs/Unity.TextMeshPro.dll</HintPath>
+      <HintPath>$(StationeersDllDir)/Unity.TextMeshPro.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UniTask">
-      <HintPath>libs/UniTask.dll</HintPath>
+      <HintPath>$(StationeersDllDir)/UniTask.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Newtonsoft.Json">
-      <HintPath>libs/Newtonsoft.Json.dll</HintPath>
+      <HintPath>$(StationeersDllDir)/Newtonsoft.Json.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="netstandard">
-      <HintPath>libs/netstandard.dll</HintPath>
+      <HintPath>$(StationeersDllDir)/netstandard.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="netstandard">
-      <HintPath>libs/UnityEngine.UI.dll</HintPath>
+      <HintPath>$(StationeersDllDir)/UnityEngine.UI.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Assembly-CSharp">
-      <HintPath>libs/Assembly-CSharp.dll</HintPath>
+      <HintPath>$(StationeersDllDir)/Assembly-CSharp.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>

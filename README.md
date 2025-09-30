@@ -13,7 +13,6 @@ This serves as a template for a code-only mod using BepInEx.
 ## Get started with your own mod
 
 - Fork and clone the project
-- Copy the dll files from your Stationeers installation to the `libs` folder
 - Make sure Python is installed (is used to generate VersionInfo.cs)
 - Run `dotnet build` to build the mod
 - Copy the resulting dll from `bin/Debug/net46` to your `BepInEx/plugins` folder
