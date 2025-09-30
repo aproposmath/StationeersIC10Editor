@@ -17,19 +17,12 @@ This serves as a template for a code-only mod using BepInEx.
 - Run `dotnet build` to build the mod
 - Copy the resulting dll from `bin/Debug/net46` to your `BepInEx/plugins` folder
 
-Before publishing your mod, make sure to change **all** occurences of "ExampleMod" to your mod name and change the **GUID** in `Main.cs` to a new one (you can generate one [here](https://www.guidgen.com/)).
-
-```bash
-$ grep -ri ExampleMode
-create_version_info.py:namespace ExampleMod {{
-Main.cs:namespace ExampleMod
-Main.cs:    public class ExampleModPlugin : BaseUnityPlugin
-Main.cs:        public const string pluginName = "ExampleMod";
-Main.csproj:    <AssemblyName>ExampleMod</AssemblyName>
-Patches.cs:namespace ExampleMod
-README.md:Before publishing your mod, make sure to change all occurences of "ExampleMod" to your mod name.
-```
-
+**Before** publishing your mod change the following names in the source code:
+- `Main.cs:5`: `namespace ExampleMod`
+- `Main.cs:10`: `pluginGuid = "aproposmath-stationeers-example-mod";`
+- `Main.cs:11`: `pluginName = "ExampleMod";`
+- `Main.csproj:7`: `ExampleMod`
+- `Main.csproj:25`: `ExampleMod` (this must match the namespace name in `Main.cs`)
 
 ## Release a new Version
 

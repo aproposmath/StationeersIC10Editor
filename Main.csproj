@@ -21,7 +21,8 @@
     <Compile Include="VersionInfo.cs"/>
   </ItemGroup>
   <Target Name="GetVersionFromPython" BeforeTargets="BeforeBuild">
-    <Exec Command="python3 create_version_info.py"/>
+    <!-- The argument after create_version_info.py must match the namespace name in Main.cs -->
+    <Exec Command="python3 create_version_info.py ExampleMod"/>
     <ReadLinesFromFile File="version.txt">
       <Output TaskParameter="Lines" PropertyName="VersionString"/>
     </ReadLinesFromFile>
