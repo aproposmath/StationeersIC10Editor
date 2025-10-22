@@ -22,15 +22,19 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
+      - run: steamcmd +login anonymous +sDepotDownloadFileFilter "*.dll" +app_update 600760 -beta beta validate +quit
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          submodules: recursive
 
       - name: Build project
         run: |
+          # Merge dlls from submodule with dedicated server dlls
           export STATIONEERS_DLL_DIR="$GITHUB_WORKSPACE/assemblies/Editor/Stationeers"
+          cp $STEAM_DIR/steamapps/common/Stationeers Dedicated Server/rocketstation_DedicatedServer_Data/Managed/*.dll $STATIONEERS_DLL_DIR/
+          find $STATIONEERS_DLL_DIR
           dotnet restore
           dotnet build --configuration Release Main.csproj
 
