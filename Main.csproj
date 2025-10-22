@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk" InitialTargets="PrintPaths">
-  <Import Project="Main.props" Condition="Exists('Main.props')"/>
+  <Import Project="Main.props" Condition="Exists('Main.props')" />
   <PropertyGroup>
     <MSBuildVerbosity>normal</MSBuildVerbosity>
     <TargetFramework>net46</TargetFramework>
-    <AssemblyName>ExampleMod</AssemblyName>
-    <Description>Example code-only mod for Stationeers</Description>
+    <AssemblyName>IC10Editor</AssemblyName>
+    <Description>Alternative IC10 Editor for Stationeers</Description>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <LangVersion>latest</LangVersion>
     <Deterministic>true</Deterministic>
@@ -15,16 +15,16 @@
   </PropertyGroup>
   <!-- Remove and add VersionInfo.cs to avoid missing it on first build and duplicate compilation on subsequent builds -->
   <ItemGroup>
-    <Compile Remove="VersionInfo.cs"/>
+    <Compile Remove="VersionInfo.cs" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="VersionInfo.cs"/>
+    <Compile Include="VersionInfo.cs" />
   </ItemGroup>
   <Target Name="GetVersionFromPython" BeforeTargets="BeforeBuild">
     <!-- The argument after create_version_info.py must match the namespace name in Main.cs -->
-    <Exec Command="python3 create_version_info.py ExampleMod"/>
+    <Exec Command="python3 create_version_info.py StationeersIC10Editor" />
     <ReadLinesFromFile File="version.txt">
-      <Output TaskParameter="Lines" PropertyName="VersionString"/>
+      <Output TaskParameter="Lines" PropertyName="VersionString" />
     </ReadLinesFromFile>
   </Target>
   <ItemGroup>
@@ -32,11 +32,11 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="UnityEngine.Modules" Version="2021.2.3" IncludeAssets="compile"/>
-    <PackageReference Include="BepInEx.Analyzers" Version="1.*" PrivateAssets="all"/>
-    <PackageReference Include="BepInEx.Core" Version="5.*"/>
-    <PackageReference Include="BepInEx.PluginInfoProps" Version="1.*"/>
-    <Publicize Include="Assembly-CSharp"/>
+    <PackageReference Include="UnityEngine.Modules" Version="2021.2.3" IncludeAssets="compile" />
+    <PackageReference Include="BepInEx.Analyzers" Version="1.*" PrivateAssets="all" />
+    <PackageReference Include="BepInEx.Core" Version="5.*" />
+    <PackageReference Include="BepInEx.PluginInfoProps" Version="1.*" />
+    <Publicize Include="Assembly-CSharp" />
     <Reference Include="Unity.TextMeshPro">
       <HintPath>$(StationeersDllDir)/Unity.TextMeshPro.dll</HintPath>
       <Private>false</Private>
@@ -57,13 +57,17 @@
       <HintPath>$(StationeersDllDir)/UnityEngine.UI.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="RG.ImGui">
+      <HintPath>$(StationeersDllDir)/RG.ImGui.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="Assembly-CSharp">
       <HintPath>$(StationeersDllDir)/Assembly-CSharp.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework.TrimEnd(`0123456789`))' == 'net'">
-    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.2" PrivateAssets="all"/>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.2" PrivateAssets="all" />
   </ItemGroup>
   <PropertyGroup>
     <Version>$(VersionString)</Version>

@@ -1,43 +1,70 @@
-using System.Collections.Generic;
-using System.Reflection.Emit;
-using Assets.Scripts.Inventory;
-using HarmonyLib;
-
-namespace ExampleMod
+namespace StationeersIC10Editor
 {
-    // Example patch to change the blueprint color to blue instead of yellow,
-    // when cable/pipe ports are matching
-    [HarmonyPatch(typeof(InventoryManager), nameof(InventoryManager.PlacementMode))]
-    public static class Patch_InventoryManager_PlacementMode
+    using System.Collections.Generic;
+    using System.Runtime.CompilerServices;
+    using Assets.Scripts.UI;
+    using Assets.Scripts.UI.ImGuiUi;
+    using Assets.Scripts.Objects.Motherboards;
+    using HarmonyLib;
+
+    [HarmonyPatch]
+    public static class IC10EditorPatches
     {
-        [HarmonyTranspiler]
-        public static IEnumerable<CodeInstruction> Transpiler(
-            IEnumerable<CodeInstruction> instructions
-        )
+        // Keep a separate editor for each motherboard's source code
+        // so that switching between them preserves state (undo operations etc.)
+        // This data is lost on save/reload of the game.
+        public static ConditionalWeakTable<ProgrammableChipMotherboard, IC10Editor> EditorData =
+            new ConditionalWeakTable<ProgrammableChipMotherboard, IC10Editor>();
+        public static List<IC10Editor> AllEditors = new List<IC10Editor>();
+
+        private static IC10Editor GetEditor(ProgrammableChipMotherboard isc)
         {
-            var code = new List<CodeInstruction>(instructions);
-
-            // Getters for Color.yellow and Color.blue
-            var colorYellowGetter = AccessTools.PropertyGetter(
-                typeof(UnityEngine.Color),
-                nameof(UnityEngine.Color.yellow)
-            );
-            var colorBlueGetter = AccessTools.PropertyGetter(
-                typeof(UnityEngine.Color),
-                nameof(UnityEngine.Color.blue)
-            );
-
-            for (int i = 0; i < code.Count; i++)
+            L.Info($"Getting IC10Editor for source code {isc}");
+            IC10Editor editor;
+            if (!EditorData.TryGetValue(isc, out editor))
             {
-                // Replace any call to Color.yellow with Color.blue
-                if (code[i].Calls(colorYellowGetter))
-                {
-                    code[i] = new CodeInstruction(OpCodes.Call, colorBlueGetter)
-                        .WithLabels(code[i].labels) // Preserve labels, if any
-                        .WithBlocks(code[i].blocks); // Preserve exception blocks, if any
-                }
+                editor = new IC10Editor(isc);
+                EditorData.Add(isc, editor);
+                AllEditors.Add(editor);
             }
-            return code;
+
+            return editor;
         }
+
+        [HarmonyPatch(
+                typeof(InputSourceCode),
+                nameof(InputSourceCode.ShowInputPanel))]
+        [HarmonyPrefix]
+        public static void InputSourceCode_ShowInputPanel_Postfix(
+            string title,
+            string defaultText
+            )
+        {
+            var editor = GetEditor(InputSourceCode.Instance.PCM);
+            editor.SetTitle(title);
+            editor.SetSourceCode(defaultText);
+            editor.ShowWindow();
+        }
+
+        [HarmonyPatch(typeof(ImguiCreativeSpawnMenu))]
+        [HarmonyPatch(nameof(ImguiCreativeSpawnMenu.Draw))]
+        [HarmonyPostfix]
+        static void ImguiCreativeSpawnMenuDrawPatch_Postfix()
+        {
+            foreach (var editor in AllEditors)
+                editor.Draw();
+        }
+
+        [HarmonyPatch(typeof(EditorLineOfCode))]
+        [HarmonyPatch(nameof(EditorLineOfCode.HandleUpdate))]
+        [HarmonyPrefix]
+        static bool EditorLineOfCodeHandleUpdatePatch_Prefix()
+        { return false; }
+
+        [HarmonyPatch(typeof(InputSourceCode))]
+        [HarmonyPatch(nameof(InputSourceCode.HandleInput))]
+        [HarmonyPrefix]
+        static bool InputSourceCodeHandleInputPatch_Prefix()
+        { return false; }
     }
 }
