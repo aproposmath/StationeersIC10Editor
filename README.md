@@ -1,39 +1,16 @@
-# Stationeers Example Mod (Code-only with BepInEx)
+# Stationeers IC10 Editor
 
-This serves as a template for a code-only mod using BepInEx.
+A custom IC10 editor for Stationeers with additional features.
 
 ## Features
 
-- Simple code base
-- No need for Unity or Visual Studio
-- Builds on Linux
-- Github workflow to build releases automatically
-- Uses Krafs.Publicizer to access private members
-
-## Get started with your own mod
-
-- Fork and clone the project
-- Make sure Python is installed (is used to generate VersionInfo.cs)
-- Run `dotnet build` to build the mod
-- Copy the resulting dll from `bin/Debug/net46` to your `BepInEx/plugins` folder
-
-**Before** publishing your mod change the following names in the source code:
-- `Main.cs:5`: `namespace ExampleMod`
-- `Main.cs:10`: `pluginGuid = "aproposmath-stationeers-example-mod";`
-- `Main.cs:11`: `pluginName = "ExampleMod";`
-- `Main.csproj:7`: `ExampleMod`
-- `Main.csproj:25`: `ExampleMod` (this must match the namespace name in `Main.cs`)
-
-## Release a new Version
-
-Just create a new git tag and push it to GitHub. The workflow will build the release automatically.
-
-```bash
-git tag v1.2.3
-git push origin v1.2.3
-```
+- Undo/Redo functionality
+- Common keyboard shortcuts (Ctrl+Z, Ctrl+R, Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+A)
+- Multiline selection
+- Syntax highlighting
+- Tooltips for IC10 instructions
 
 ## Installation
 
 This mode requires [BepInEx](https://github.com/BepInEx/BepInEx).
-Download the latest release from the [releases page](https://github.com/aproposmath/stationeers-example-mod/releases) and put it into your `BepInEx/plugins` folder.
+Download the latest release from the [releases page](https://github.com/aproposmath/StationeersIC10Editor/releases) and put it into your `BepInEx/plugins` folder.
