@@ -266,6 +266,11 @@ namespace StationeersIC10Editor
 
         private void RemoveDictEntry(Dictionary<string, int> dict, string key)
         {
+            if (!dict.ContainsKey(key))
+            {
+                L.Warning($"RemoveDictEntry: trying to remove non-existing key {key} from dictionary");
+                return;
+            }
             dict[key]--;
             if (dict[key] == 0)
                 dict.Remove(key);

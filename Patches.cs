@@ -45,7 +45,7 @@ namespace StationeersIC10Editor
             editor.SetTitle(title);
             editor.ResetCode(defaultText);
             editor.ShowWindow();
-            defaultText = string.Empty; // The editor causes lag for large code, so let it emtpy
+            defaultText = string.Empty; // The editor causes lag for large code, so disable it
         }
 
         [HarmonyPatch(typeof(ImguiCreativeSpawnMenu))]

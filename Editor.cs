@@ -18,21 +18,7 @@ namespace StationeersIC10Editor
 
     public class IC10Editor
     {
-        private static bool _useNativeEditor = false;
-        public static bool UseNativeEditor
-        {
-            get { return _useNativeEditor; }
-            set
-            {
-                _useNativeEditor = value;
-                if (_useNativeEditor)
-                {
-                    foreach (var editor in IC10EditorPatches.AllEditors)
-                        if (editor.Show)
-                            editor.SwitchToNativeEditor();
-                }
-            }
-        }
+        public static bool UseNativeEditor = false;
 
         private ProgrammableChipMotherboard _pcm;
         private string Title = "IC10 Editor";
@@ -141,9 +127,15 @@ namespace StationeersIC10Editor
 
         public void SwitchToNativeEditor()
         {
+            UseNativeEditor = true;
+            // Disabled = true;
             L.Info("Switching to native IC10 editor");
-            HideWindow();
-            InputSourceCode.ShowInputPanel(Title, Code);
+            Show = false;
+            InputSourceCode.Instance.Window.localPosition = new Vector3(0, 0, 0);
+            KeyManager.RemoveInputState("ic10editorinputstate");
+            InputSourceCode.Paste(Code);
+            // InputSourceCode.ShowInputPanel(Title, Code);
+            // Disabled = false;
         }
 
         public void HideWindow()
@@ -169,7 +161,7 @@ namespace StationeersIC10Editor
             if (!WorldManager.IsGamePaused)
                 InputSourceCode.Instance.PauseGameToggle(true);
 
-            InputSourceCode.Instance.RectTransform.localPosition = new Vector3(10000, 10000, 0);
+            InputSourceCode.Instance.RectTransform.localPosition = new Vector3(-10000, -10000, 0);
         }
 
         public bool IsInitialized = false;
@@ -339,12 +331,15 @@ namespace StationeersIC10Editor
             string afterCaret = CurrentLine.Substring(CaretCol, CurrentLine.Length - CaretCol);
             CurrentLine = beforeCaret + newLines[0];
             newLines.RemoveAt(0);
+            int newCaretCol = newLines[newLines.Count - 1].Length;
             newLines[newLines.Count - 1] += afterCaret;
             Lines.InsertRange(CaretLine + 1, newLines);
             foreach (var line in newLines)
                 CodeFormatter.AddLine(line);
 
-            MoveCaret(afterCaret.Length, newLines.Count - 1, true);
+            CaretPos = new TextPosition(
+                CaretLine + newLines.Count,
+                newCaretCol);
         }
 
         public bool HaveSelection => (bool)Selection;
@@ -370,10 +365,9 @@ namespace StationeersIC10Editor
         public bool DeleteRange(TextRange range)
         {
             if (!(bool)range)
-            {
                 return false;
-            }
-            L.Info($"Deleting range: {range.Start.Line},{range.Start.Col} to {range.End.Line},{range.End.Col}");
+
+            range = range.Sorted();
 
             PushUndoState();
 
@@ -401,8 +395,6 @@ namespace StationeersIC10Editor
                 }
             }
 
-            L.Info($"New code after deletion: {Code}");
-
             CaretPos = start;
             return true;
         }
@@ -427,34 +419,21 @@ namespace StationeersIC10Editor
             if (ctrlDown)
             {
                 if (ImGui.IsKeyPressed(ImGuiKey.E))
-                {
-                    L.Info("Exporting IC10 Editor code");
                     Export();
-                }
-
                 if (ImGui.IsKeyPressed(ImGuiKey.S))
-                {
-                    L.Info("Saving IC10 Editor code");
                     Confirm();
-                }
                 if (ImGui.IsKeyPressed(ImGuiKey.V))
                     Paste();
                 if (ImGui.IsKeyPressed(ImGuiKey.A))
                     SelectAll();
                 if (ImGui.IsKeyPressed(ImGuiKey.C))
                     Copy();
-
                 if (ImGui.IsKeyPressed(ImGuiKey.X))
-                {
                     Cut();
-                }
-
                 if (ImGui.IsKeyPressed(ImGuiKey.Z))
                     Undo();
-
                 if (ImGui.IsKeyPressed(ImGuiKey.R))
                     Redo();
-
             }
             else
             {
@@ -598,7 +577,7 @@ namespace StationeersIC10Editor
             ImGui.SameLine();
 
             if (ImGui.Button("Native", buttonSize))
-                IC10Editor.UseNativeEditor = true;
+                SwitchToNativeEditor();
 
             ImGui.SameLine();
 
@@ -833,8 +812,8 @@ namespace StationeersIC10Editor
                 ImGui.TextWrapped(
                     "Keyboard Shortcuts:\n" +
                     "\n" +
-                    "- Ctrl+S:       Save and confirm changes\n" +
-                    "- Ctrl+E:       Save + export code to chip\n" +
+                    // "- Ctrl+S:       Save and confirm changes\n" +
+                    // "- Ctrl+E:       Save + export code to chip\n" +
                     "- Ctrl+Z:       Undo\n" +
                     "- Ctrl+R:       Redo\n" +
                     "- Ctrl+C:       Copy selected code\n" +
