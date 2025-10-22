@@ -54,18 +54,6 @@ namespace StationeersIC10Editor
         }
     }
 
-    public struct IntRange
-    {
-        public int Start;
-        public int Next;
-
-        public IntRange(int start, int next)
-        {
-            Start = start;
-            Next = next;
-        }
-    }
-
     public struct TextPosition
     {
         public int Line;

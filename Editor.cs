@@ -18,6 +18,22 @@ namespace StationeersIC10Editor
 
     public class IC10Editor
     {
+        private static bool _useNativeEditor = false;
+        public static bool UseNativeEditor
+        {
+            get { return _useNativeEditor; }
+            set
+            {
+                _useNativeEditor = value;
+                if (_useNativeEditor)
+                {
+                    foreach (var editor in IC10EditorPatches.AllEditors)
+                        if (editor.Show)
+                            editor.SwitchToNativeEditor();
+                }
+            }
+        }
+
         private ProgrammableChipMotherboard _pcm;
         private string Title = "IC10 Editor";
 
@@ -25,6 +41,7 @@ namespace StationeersIC10Editor
         {
             CodeFormatter = new IC10CodeFormatter();
             UndoList = new LinkedList<EditorState>();
+            RedoList = new LinkedList<EditorState>();
             Lines = new List<string>();
             Lines.Add("");
             CaretPos = new TextPosition(0, 0);
@@ -47,13 +64,13 @@ namespace StationeersIC10Editor
 
             set
             {
-                ClearCode();
-                Insert(value.Code);
+                ResetCode(value.Code);
                 CaretPos = value.CaretPos;
             }
         }
 
         public LinkedList<EditorState> UndoList;
+        public LinkedList<EditorState> RedoList;
         public bool ScrollToCaret = false;
 
         public void PushUndoState()
@@ -79,8 +96,28 @@ namespace StationeersIC10Editor
             if (UndoList.Count > 0)
             {
                 State = UndoList.First.Value;
+                RedoList.AddFirst(State);
                 UndoList.RemoveFirst();
             }
+        }
+
+        public void Redo()
+        {
+            if (RedoList.Count > 0)
+            {
+                State = RedoList.First.Value;
+                UndoList.AddFirst(State);
+                RedoList.RemoveFirst();
+            }
+        }
+
+        public void ReplaceLine(int lineIndex, string newLine)
+        {
+            if (lineIndex < 0 || lineIndex >= Lines.Count)
+                return;
+
+            CodeFormatter.ReplaceLine(Lines[lineIndex], newLine);
+            Lines[lineIndex] = newLine;
         }
 
         public string CurrentLine
@@ -93,29 +130,34 @@ namespace StationeersIC10Editor
             set
             {
                 if (value == Lines[CaretLine])
-                {
                     return;
-                }
 
-                CodeFormatter.ReplaceLine(CurrentLine, value);
-                Lines[CaretLine] = value;
+                ReplaceLine(CaretLine, value);
             }
         }
 
         private bool Show = false;
         private double blinkStartTime = 0.0;
 
+        public void SwitchToNativeEditor()
+        {
+            L.Info("Switching to native IC10 editor");
+            HideWindow();
+            InputSourceCode.ShowInputPanel(Title, Code);
+        }
+
         public void HideWindow()
         {
             L.Info("Hiding IC10 Editor window");
             Show = false;
             KeyManager.RemoveInputState("ic10editorinputstate");
-            CursorManager.SetCursor(false);
-            InputWindow.InputState = InputPanelState.None;
-            InputSourceCode.InputState = InputPanelState.None;
-            InputMouse.SetMouseControl(false);
+            // CursorManager.SetCursor(false);
+            // InputWindow.InputState = InputPanelState.None;
+            // InputSourceCode.InputState = InputPanelState.None;
+            // InputMouse.SetMouseControl(false);
             if (WorldManager.IsGamePaused)
                 InputSourceCode.Instance.PauseGameToggle(false);
+            InputSourceCode.Instance.ButtonInputCancel();
         }
 
         public void ShowWindow()
@@ -124,31 +166,43 @@ namespace StationeersIC10Editor
             Show = true;
             L.Info($"Current code {Code}");
             KeyManager.SetInputState("ic10editorinputstate", KeyInputState.Typing);
-            CursorManager.SetCursor(true);
-            // InputSourceCode.InputState = InputPanelState.Waiting;
-            // InputWindow.InputState = InputPanelState.Waiting;
-            InputMouse.SetMouseControl(true);
             if (!WorldManager.IsGamePaused)
                 InputSourceCode.Instance.PauseGameToggle(true);
 
-            // InputSourceCode.Instance.SetActive(false);
-            // PanelInputSourceCode.Instance.gameObject.SetActive(false);
-            InputSourceCode.Instance.CodeInputWindow.SetVisible(false);
+            InputSourceCode.Instance.RectTransform.localPosition = new Vector3(10000, 10000, 0);
         }
 
         public bool IsInitialized = false;
-        public TextPosition CaretPos;
+        public TextPosition _caretPos;
+
+        public TextPosition CaretPos
+        {
+            get { return _caretPos; }
+            set
+            {
+                _caretPos = value;
+                if (_caretPos.Line < 0)
+                    _caretPos.Line = 0;
+                if (_caretPos.Line >= Lines.Count)
+                    _caretPos.Line = Lines.Count - 1;
+                if (_caretPos.Col < 0)
+                    _caretPos.Col = 0;
+                if (_caretPos.Col > Lines[_caretPos.Line].Length)
+                    _caretPos.Col = Lines[_caretPos.Line].Length;
+                ScrollToCaret = true;
+            }
+        }
 
         public int CaretLine
         {
-            get { return CaretPos.Line; }
-            set { CaretPos.Line = value; }
+            get { return _caretPos.Line; }
+            set { CaretPos = new TextPosition(value, _caretPos.Col); }
         }
 
         public int CaretCol
         {
             get { return CaretPos.Col; }
-            set { CaretPos.Col = value; }
+            set { CaretPos = new TextPosition(_caretPos.Line, value); }
         }
 
         public TextRange Selection;
@@ -235,7 +289,10 @@ namespace StationeersIC10Editor
 
         public void Cut()
         {
-            GameManager.Clipboard = string.Join("\n", Lines);
+            if (!HaveSelection)
+                return;
+            GameManager.Clipboard = SelectedCode;
+            DeleteSelectedCode();
         }
 
         public void Copy()
@@ -249,22 +306,14 @@ namespace StationeersIC10Editor
 
         public void Paste()
         {
-            DeleteSelectedCode();
+            if (!DeleteSelectedCode())
+                PushUndoState();
             Insert(GameManager.Clipboard.Replace("\r", string.Empty));
         }
 
         public void SetTitle(string title)
         {
             Title = title;
-        }
-        public void SetSourceCode(string code)
-        {
-            L.Info("Setting IC10 Editor source code");
-            ClearCode();
-            Insert(code);
-            CaretPos = new TextPosition(0, 0);
-            L.Info($"Current code {Code}");
-            L.Info($"Caret position {CaretPos.Line},{CaretPos.Col}");
         }
 
         public void ClearCode(bool pushUndo = true)
@@ -285,20 +334,17 @@ namespace StationeersIC10Editor
             if (newLines.Count == 0)
                 return;
 
-            CurrentLine += newLines[0];
+            CodeFormatter.RemoveLine(CurrentLine);
+            string beforeCaret = CurrentLine.Substring(0, CaretCol);
+            string afterCaret = CurrentLine.Substring(CaretCol, CurrentLine.Length - CaretCol);
+            CurrentLine = beforeCaret + newLines[0];
             newLines.RemoveAt(0);
-            Lines.InsertRange(CaretLine, newLines);
+            newLines[newLines.Count - 1] += afterCaret;
+            Lines.InsertRange(CaretLine + 1, newLines);
             foreach (var line in newLines)
-            {
                 CodeFormatter.AddLine(line);
-            }
 
-            MoveCaret(0, newLines.Count, true);
-        }
-
-        public void Export()
-        {
-            _pcm.InputFinished(Code);
+            MoveCaret(afterCaret.Length, newLines.Count - 1, true);
         }
 
         public bool HaveSelection => (bool)Selection;
@@ -327,6 +373,7 @@ namespace StationeersIC10Editor
             {
                 return false;
             }
+            L.Info($"Deleting range: {range.Start.Line},{range.Start.Col} to {range.End.Line},{range.End.Col}");
 
             PushUndoState();
 
@@ -337,7 +384,7 @@ namespace StationeersIC10Editor
                 string line = Lines[start.Line];
                 string newLine =
                     line.Substring(0, start.Col) + line.Substring(end.Col, line.Length - end.Col);
-                CurrentLine = newLine;
+                ReplaceLine(start.Line, newLine);
             }
             else
             {
@@ -345,7 +392,7 @@ namespace StationeersIC10Editor
                 string lastLine = Lines[end.Line];
                 string newFirstLine = firstLine.Substring(0, start.Col);
                 string newLastLine = lastLine.Substring(end.Col, lastLine.Length - end.Col);
-                CurrentLine = newFirstLine + newLastLine;
+                ReplaceLine(start.Line, newFirstLine + newLastLine);
 
                 for (int i = end.Line; i > start.Line; i--)
                 {
@@ -354,8 +401,9 @@ namespace StationeersIC10Editor
                 }
             }
 
-            CaretLine = start.Line;
-            CaretCol = start.Col;
+            L.Info($"New code after deletion: {Code}");
+
+            CaretPos = start;
             return true;
         }
 
@@ -378,6 +426,17 @@ namespace StationeersIC10Editor
             bool shiftDown = io.KeyShift;
             if (ctrlDown)
             {
+                if (ImGui.IsKeyPressed(ImGuiKey.E))
+                {
+                    L.Info("Exporting IC10 Editor code");
+                    Export();
+                }
+
+                if (ImGui.IsKeyPressed(ImGuiKey.S))
+                {
+                    L.Info("Saving IC10 Editor code");
+                    Confirm();
+                }
                 if (ImGui.IsKeyPressed(ImGuiKey.V))
                     Paste();
                 if (ImGui.IsKeyPressed(ImGuiKey.A))
@@ -387,12 +446,15 @@ namespace StationeersIC10Editor
 
                 if (ImGui.IsKeyPressed(ImGuiKey.X))
                 {
-                    GameManager.Clipboard = SelectedCode;
-                    DeleteSelectedCode();
+                    Cut();
                 }
 
                 if (ImGui.IsKeyPressed(ImGuiKey.Z))
                     Undo();
+
+                if (ImGui.IsKeyPressed(ImGuiKey.R))
+                    Redo();
+
             }
             else
             {
@@ -417,6 +479,22 @@ namespace StationeersIC10Editor
                         CodeFormatter.RemoveLine(Lines[CaretLine - 1]);
                         CaretLine--;
                         CaretCol = prevLineLength;
+                    }
+                }
+                if (ImGui.IsKeyPressed(ImGuiKey.Delete))
+                {
+                    if (DeleteSelectedCode())
+                        return;
+
+                    PushUndoState();
+                    if (CaretCol < CurrentLine.Length)
+                        CurrentLine = CurrentLine.Remove(CaretCol, 1);
+                    else if (CaretCol == CurrentLine.Length && CaretLine < Lines.Count - 1)
+                    {
+                        // Merge with next line
+                        CurrentLine = CurrentLine + Lines[CaretLine + 1];
+                        Lines.RemoveAt(CaretLine + 1);
+                        CodeFormatter.RemoveLine(Lines[CaretLine]);
                     }
                 }
 
@@ -489,6 +567,8 @@ namespace StationeersIC10Editor
                 }
         }
 
+        private bool _helpWindowVisible = false;
+
         public void DrawHeader()
         {
             // rounded buttons style
@@ -509,6 +589,16 @@ namespace StationeersIC10Editor
                 ClearCode();
                 Insert(GameManager.Clipboard);
             }
+
+            ImGui.SameLine();
+
+            if (ImGui.Button("Help", buttonSize))
+                _helpWindowVisible = !_helpWindowVisible;
+
+            ImGui.SameLine();
+
+            if (ImGui.Button("Native", buttonSize))
+                IC10Editor.UseNativeEditor = true;
 
             ImGui.SameLine();
 
@@ -544,21 +634,32 @@ namespace StationeersIC10Editor
 
             ImGui.SameLine();
 
-            ImGui.SetCursorPosX(ImGui.GetWindowWidth() - 2 * buttonSize.x - ImGui.GetStyle().FramePadding.x * 2 - ImGui.GetStyle().ItemSpacing.x);
+            ImGui.SetCursorPosX(ImGui.GetWindowWidth() - 3 * buttonSize.x - ImGui.GetStyle().FramePadding.x * 3 - ImGui.GetStyle().ItemSpacing.x);
             if (ImGui.Button("Cancel", buttonSize))
-            {
-                L.Info("Cancelling IC10 Editor changes");
                 HideWindow();
-            }
+
+            ImGui.SameLine();
+            if (ImGui.Button("Export", buttonSize))
+                Export();
 
             ImGui.SameLine();
             if (ImGui.Button("Confirm", buttonSize))
-            {
-                L.Info("Confirming IC10 Editor changes");
-                _pcm.SetSourceCode(Code);
-                HideWindow();
-            }
+                Confirm();
+
             ImGui.PopStyleVar();
+        }
+
+        public void Confirm()
+        {
+            L.Info("Confirming IC10 Editor changes");
+            _pcm.InputFinished(Code);
+            HideWindow();
+        }
+
+        public void Export()
+        {
+            Confirm();
+            _pcm.Export();
         }
 
         private bool MouseIsInsideTextArea(Vector2 mousePos, Vector2 textOrigin, Vector2 availSize)
@@ -676,12 +777,13 @@ namespace StationeersIC10Editor
         public void Draw()
         {
             if (!Show) return;
-            InputSourceCode.Instance.CodeInputWindow.SetVisible(false);
-            InputSourceCode.Instance.CodeInputWindow.SetActive(false);
-            if(PanelInputSourceCode.Instance != null)
-              PanelInputSourceCode.Instance.gameObject.SetActive(false);
+            // InputSourceCode.Instance.CodeInputWindow.SetVisible(false);
+            // InputSourceCode.Instance.CodeInputWindow.SetActive(false);
+            // if(PanelInputSourceCode.Instance != null)
+            //   PanelInputSourceCode.Instance.gameObject.SetActive(false);
             // InputSourceCode.Instance.SetVisible(false);
-            
+
+            InputSourceCode.Instance.Window.localPosition = new Vector3(-10000, -10000, 0);
             ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.1f, 0.1f, 0.1f, 1.0f));
             ImGui.GetStyle().Colors[(int)ImGuiCol.WindowBg] = new Vector4(0.1f, 0.1f, 0.1f, 1.0f);
 
@@ -712,6 +814,52 @@ namespace StationeersIC10Editor
             ImGui.PopStyleColor();
 
             CodeFormatter.DrawTooltip(Lines[CaretLine], CaretPos, caretPixelPos);
+
+            DrawHelpWindow();
+        }
+
+        public void DrawHelpWindow()
+        {
+            if (_helpWindowVisible)
+            {
+                ImGui.SetNextWindowSize(new Vector2(600, 400), ImGuiCond.FirstUseEver);
+                ImGui.Begin("IC10 Editor Help", ref _helpWindowVisible);
+
+                ImGui.TextWrapped(
+                    "This is the IC10 Editor. It allows you to edit the source code of IC10 programs with syntax highlighting, undo/redo, and other features.");
+
+                ImGui.Separator();
+
+                ImGui.TextWrapped(
+                    "Keyboard Shortcuts:\n" +
+                    "\n" +
+                    "- Ctrl+S:       Save and confirm changes\n" +
+                    "- Ctrl+E:       Save + export code to chip\n" +
+                    "- Ctrl+Z:       Undo\n" +
+                    "- Ctrl+R:       Redo\n" +
+                    "- Ctrl+C:       Copy selected code\n" +
+                    "- Ctrl+V:       Paste code from clipboard\n" +
+                    "- Ctrl+A:       Select all code\n" +
+                    "- Ctrl+X:       Cut selected code\n" +
+                    "- Arrow Keys:   Move caret\n" +
+                    "- Home/End:     Move caret to start/end of line\n" +
+                    "- Page Up/Down: Move caret up/down by 20 lines");
+
+                ImGui.End();
+            }
+        }
+
+        public void ResetCode(string code)
+        {
+            ClearCode(false);
+            Lines.Clear();
+            var lines = code.Split('\n');
+            foreach (var line in lines)
+            {
+                Lines.Add(line);
+                CodeFormatter.AddLine(line);
+            }
+            CaretPos = new TextPosition(0, 0);
         }
 
 

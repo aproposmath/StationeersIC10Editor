@@ -35,15 +35,17 @@ namespace StationeersIC10Editor
                 typeof(InputSourceCode),
                 nameof(InputSourceCode.ShowInputPanel))]
         [HarmonyPrefix]
-        public static void InputSourceCode_ShowInputPanel_Postfix(
+        public static void InputSourceCode_ShowInputPanel_Prefix(
             string title,
-            string defaultText
+            ref string defaultText
             )
         {
+            IC10Editor.UseNativeEditor = false;
             var editor = GetEditor(InputSourceCode.Instance.PCM);
             editor.SetTitle(title);
-            editor.SetSourceCode(defaultText);
+            editor.ResetCode(defaultText);
             editor.ShowWindow();
+            defaultText = string.Empty; // The editor causes lag for large code, so disable it
         }
 
         [HarmonyPatch(typeof(ImguiCreativeSpawnMenu))]
@@ -59,12 +61,12 @@ namespace StationeersIC10Editor
         [HarmonyPatch(nameof(EditorLineOfCode.HandleUpdate))]
         [HarmonyPrefix]
         static bool EditorLineOfCodeHandleUpdatePatch_Prefix()
-        { return false; }
+        { return IC10Editor.UseNativeEditor; }
 
         [HarmonyPatch(typeof(InputSourceCode))]
         [HarmonyPatch(nameof(InputSourceCode.HandleInput))]
         [HarmonyPrefix]
         static bool InputSourceCodeHandleInputPatch_Prefix()
-        { return false; }
+        { return IC10Editor.UseNativeEditor; }
     }
 }

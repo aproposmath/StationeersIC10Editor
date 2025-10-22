@@ -32,6 +32,37 @@ namespace StationeersIC10Editor
 
         public static uint ColorFromHTML(string htmlColor)
         {
+            if (string.IsNullOrWhiteSpace(htmlColor))
+            {
+                L.Warning("ColorFromHTML: empty color string");
+                return ColorDefault;
+            }
+            if (htmlColor.StartsWith("0x"))
+                htmlColor = htmlColor.Substring(2);
+            if (!htmlColor.StartsWith("#"))
+            {
+                if (htmlColor == "blue")
+                    return 0xFF0000FF;
+                if (htmlColor == "red")
+                    return 0xFFFF0000;
+                if (htmlColor == "green")
+                    return 0xFF00FF00;
+                if (htmlColor == "white")
+                    return 0xFFFFFFFF;
+                if (htmlColor == "black")
+                    return 0xFF000000;
+                if (htmlColor == "yellow")
+                    return 0xFFFFFF00;
+                if (htmlColor == "orange")
+                    return 0xFFFFA500;
+                if (htmlColor == "purple")
+                    return 0xFF800080;
+                if (htmlColor == "gray" || htmlColor == "grey")
+                    return 0xFF808080;
+
+                L.Warning($"ColorFromHTML - unknown color: {htmlColor}");
+                return ColorDefault;
+            }
             htmlColor = htmlColor.TrimStart('#');
             uint rgb = uint.Parse(htmlColor, System.Globalization.NumberStyles.HexNumber);
             byte a = 0xFF;
@@ -310,53 +341,99 @@ namespace StationeersIC10Editor
                 return ColorDefault;
         }
 
+        public struct ColoredTextSegment
+        {
+            public uint Color;
+            public string Text;
+
+            public ColoredTextSegment(string color, string text)
+            {
+                Color = ColorFromHTML(color);
+                Text = text;
+            }
+        }
+
+        public static List<ColoredTextSegment> ParseAndDrawColoredText(string input)
+        {
+            var result = new List<ColoredTextSegment>();
+            var regex = new Regex(@"<color=(.*?)>(.*?)</color>", RegexOptions.Singleline);
+            int lastIndex = 0;
+
+            foreach (Match match in regex.Matches(input))
+            {
+                if (match.Index > lastIndex)
+                {
+                    string rawText = input.Substring(lastIndex, match.Index - lastIndex);
+                    result.Add(new ColoredTextSegment("#ffffff", rawText));
+                }
+
+                string color = match.Groups[1].Value;
+                string text = match.Groups[2].Value;
+                result.Add(new ColoredTextSegment(color, text));
+
+                lastIndex = match.Index + match.Length;
+            }
+
+            if (lastIndex < input.Length)
+                result.Add(new ColoredTextSegment("#ffffff", input.Substring(lastIndex)));
+
+            Vector2 pos = ImGui.GetCursorScreenPos();
+            foreach (var segment in result)
+            {
+                ImGui.GetWindowDrawList().AddText(
+                    pos,
+                    segment.Color,
+                    segment.Text);
+                pos.x += ImGui.CalcTextSize(segment.Text).x;
+            }
+
+            ImGui.NewLine();
+
+            return result;
+        }
+
         public override void DrawTooltip(string line, TextPosition caret, Vector2 pos)
         {
             var col = caret.Col;
             if (col == 0)
-                return;
-            if (col >= line.Length)
                 return;
             var charBefore = line[col - 1];
             var tokensBefore = ICodeFormatter.Tokenize(line.Substring(0, col), true);
             if (charBefore == ' ' && tokensBefore.Count > 0)
             {
                 var instruction = tokensBefore[0];
-                String tooltipText = "";
                 if (instructions.ContainsKey(instruction))
                 {
-                    ScriptCommand scriptCommand = instructions[instruction];
-                    StringBuilder stringBuilder = new StringBuilder();
-                    string commandExample = ProgrammableChip.GetCommandExample(scriptCommand);
-                    stringBuilder.Append("<color=white>").Append("<b>").Append("Instruction")
-                        .AppendLine("</b></color>");
-                    stringBuilder.Append("<i>").Append(commandExample).AppendLine("</i>");
-                    StringManager.WrapLineLength(stringBuilder, ProgrammableChip.GetCommandDescription(scriptCommand), 70, "grey");
-                    UITooltipManager.SetTooltip(stringBuilder);
+                    pos += new Vector2(30, 40);
+
+                    ImGui.SetNextWindowSize(new Vector2(500, 0), ImGuiCond.Once);
+                    ImGui.SetNextWindowPos(pos, ImGuiCond.Always);
+
+                    if (ImGui.Begin("##IC10EditorTooltip",
+                        ImGuiWindowFlags.NoNav
+                        // | ImGuiWindowFlags.NoFocusOnAppearing
+                        | ImGuiWindowFlags.NoTitleBar
+                        | ImGuiWindowFlags.NoScrollbar
+                        | ImGuiWindowFlags.NoSavedSettings
+                        | ImGuiWindowFlags.NoMove
+                        | ImGuiWindowFlags.NoCollapse
+                        | ImGuiWindowFlags.NoResize
+                        ))
+                    {
+
+                        ScriptCommand scriptCommand = instructions[instruction];
+                        String example = ProgrammableChip.GetCommandExample(scriptCommand);
+                        String description = ProgrammableChip.GetCommandDescription(scriptCommand);
+
+                        ParseAndDrawColoredText($"Instruction: <color=yellow>{instruction}</color>");
+                        ImGui.Separator();
+                        ParseAndDrawColoredText($"    {example}");
+                        ImGui.NewLine();
+                        // ImGui.Text("Description: ");
+                        ImGui.TextWrapped(description);
+                        ImGui.End();
+                    }
                 }
-
-
-                // pos += new Vector2(30, 40);
-                //
-                // ImGui.SetNextWindowSize(new Vector2(300, 200), ImGuiCond.Once);
-                // ImGui.SetNextWindowPos(pos, ImGuiCond.Once);
-                //
-                // if (ImGui.Begin("##IC10EditorTooltip",
-                //     ImGuiWindowFlags.NoNav
-                //     | ImGuiWindowFlags.NoTitleBar
-                //     | ImGuiWindowFlags.NoScrollbar
-                //     | ImGuiWindowFlags.NoSavedSettings
-                //     | ImGuiWindowFlags.NoMove
-                //     | ImGuiWindowFlags.NoCollapse
-                //     | ImGuiWindowFlags.NoResize
-                //     ))
-                // {
-                //
-                //     ImGui.Text($"Instruction: {firstToken}");
-                //     ImGui.Text("Description: ");
-                //     // ImGui.TextWrapped(EnumCollections.GetScriptCommandDescription((ScriptCommand)Enum.Parse(typeof(ScriptCommand), firstToken)));
-                //     ImGui.End();
-                // }
             }
         }
     }
