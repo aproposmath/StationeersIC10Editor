@@ -34,7 +34,7 @@ jobs:
         run: |
           # Merge dlls from submodule with dedicated server dlls
           export STATIONEERS_DLL_DIR="$GITHUB_WORKSPACE/assemblies/Editor/Stationeers"
-          cp $STEAM_DIR/steamapps/common/Stationeers Dedicated Server/rocketstation_DedicatedServer_Data/Managed/*.dll $STATIONEERS_DLL_DIR/
+          cp $STEAM_DIR/steamapps/common/Stationeers\ Dedicated\ Server/rocketstation_DedicatedServer_Data/Managed/*.dll $STATIONEERS_DLL_DIR/
           find $STATIONEERS_DLL_DIR
           dotnet restore
           dotnet build --configuration Release Main.csproj
