@@ -45,13 +45,13 @@ namespace StationeersIC10Editor
             editor.SetTitle(title);
             editor.ResetCode(defaultText);
             editor.ShowWindow();
-            defaultText = string.Empty; // The editor causes lag for large code, so disable it
+            defaultText = "__IC10PLACEHOLDER__"; // The editor causes lag for large code, so don't paste it now
         }
 
         [HarmonyPatch(typeof(ImguiCreativeSpawnMenu))]
         [HarmonyPatch(nameof(ImguiCreativeSpawnMenu.Draw))]
         [HarmonyPostfix]
-        static void ImguiCreativeSpawnMenuDrawPatch_Postfix()
+        static void ImguiCreativeSpawnMenu_Draw_Postfix()
         {
             foreach (var editor in AllEditors)
                 editor.Draw();
@@ -60,13 +60,42 @@ namespace StationeersIC10Editor
         [HarmonyPatch(typeof(EditorLineOfCode))]
         [HarmonyPatch(nameof(EditorLineOfCode.HandleUpdate))]
         [HarmonyPrefix]
-        static bool EditorLineOfCodeHandleUpdatePatch_Prefix()
+        static bool EditorLineOfCode_HandleUpdate_Prefix()
         { return IC10Editor.UseNativeEditor; }
 
         [HarmonyPatch(typeof(InputSourceCode))]
         [HarmonyPatch(nameof(InputSourceCode.HandleInput))]
         [HarmonyPrefix]
-        static bool InputSourceCodeHandleInputPatch_Prefix()
+        static bool InputSourceCode_HandleInput_Prefix()
         { return IC10Editor.UseNativeEditor; }
+
+        [HarmonyPatch(typeof(InputSourceCode))]
+        [HarmonyPatch(nameof(InputSourceCode.Copy))]
+        [HarmonyPrefix]
+        static bool InputSourceCode_Copy_Prefix(ref string __result)
+        {
+            if (IC10Editor.UseNativeEditor)
+                return true;
+
+            var editor = GetEditor(InputSourceCode.Instance.PCM);
+            __result = editor.Code;
+            return false;
+        }
+
+        [HarmonyPatch(typeof(InputSourceCode))]
+        [HarmonyPatch(nameof(InputSourceCode.Paste))]
+        [HarmonyPrefix]
+        static bool InputSourceCode_Copy_Paste(ref string value)
+        {
+            if (IC10Editor.UseNativeEditor)
+                return true;
+
+            // See the patch for ShowInputPanel - we set a placeholder value there
+            if (value != "__IC10PLACEHOLDER__")
+                GetEditor(InputSourceCode.Instance.PCM).ResetCode(value);
+
+            return false;
+
+        }
     }
 }

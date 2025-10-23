@@ -50,7 +50,7 @@ namespace StationeersIC10Editor
 
             set
             {
-                ResetCode(value.Code);
+                ResetCode(value.Code, false);
                 CaretPos = value.CaretPos;
             }
         }
@@ -81,8 +81,8 @@ namespace StationeersIC10Editor
         {
             if (UndoList.Count > 0)
             {
-                State = UndoList.First.Value;
                 RedoList.AddFirst(State);
+                State = UndoList.First.Value;
                 UndoList.RemoveFirst();
             }
         }
@@ -91,8 +91,8 @@ namespace StationeersIC10Editor
         {
             if (RedoList.Count > 0)
             {
-                State = RedoList.First.Value;
                 UndoList.AddFirst(State);
+                State = RedoList.First.Value;
                 RedoList.RemoveFirst();
             }
         }
@@ -128,14 +128,13 @@ namespace StationeersIC10Editor
         public void SwitchToNativeEditor()
         {
             UseNativeEditor = true;
-            // Disabled = true;
             L.Info("Switching to native IC10 editor");
             Show = false;
+
+            // localPosition was set to -10000,-10000,0 to hide the native editor, so set it back to 0,0,0 to show it
             InputSourceCode.Instance.Window.localPosition = new Vector3(0, 0, 0);
             KeyManager.RemoveInputState("ic10editorinputstate");
             InputSourceCode.Paste(Code);
-            // InputSourceCode.ShowInputPanel(Title, Code);
-            // Disabled = false;
         }
 
         public void HideWindow()
@@ -143,10 +142,8 @@ namespace StationeersIC10Editor
             L.Info("Hiding IC10 Editor window");
             Show = false;
             KeyManager.RemoveInputState("ic10editorinputstate");
-            // CursorManager.SetCursor(false);
-            // InputWindow.InputState = InputPanelState.None;
-            // InputSourceCode.InputState = InputPanelState.None;
-            // InputMouse.SetMouseControl(false);
+            if (InputWindow.InputState == InputPanelState.Waiting)
+                InputWindow.CancelInput();
             if (WorldManager.IsGamePaused)
                 InputSourceCode.Instance.PauseGameToggle(false);
             InputSourceCode.Instance.ButtonInputCancel();
@@ -412,16 +409,27 @@ namespace StationeersIC10Editor
 
         public void HandleInput()
         {
+            foreach (ImGuiKey key in Enum.GetValues(typeof(ImGuiKey)))
+            {
+                if (key != ImGuiKey.COUNT && ImGui.IsKeyPressed(key))
+                    L.Info($"Imgui Pressed: {key}");
+            }
             var io = ImGui.GetIO();
             io.ConfigWindowsMoveFromTitleBarOnly = true;
-            bool ctrlDown = io.KeyCtrl;
-            bool shiftDown = io.KeyShift;
+            bool ctrlDown = io.KeyCtrl || Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+            bool shiftDown = io.KeyShift || Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+
+            if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl))
+            {
+                // these combos are not captured by ImGui for some reason, so handle them via Unity Input
+                if (Input.GetKeyDown(KeyCode.S))
+                    Confirm();
+                if (Input.GetKeyDown(KeyCode.E))
+                    Export();
+            }
+
             if (ctrlDown)
             {
-                if (ImGui.IsKeyPressed(ImGuiKey.E))
-                    Export();
-                if (ImGui.IsKeyPressed(ImGuiKey.S))
-                    Confirm();
                 if (ImGui.IsKeyPressed(ImGuiKey.V))
                     Paste();
                 if (ImGui.IsKeyPressed(ImGuiKey.A))
@@ -432,8 +440,15 @@ namespace StationeersIC10Editor
                     Cut();
                 if (ImGui.IsKeyPressed(ImGuiKey.Z))
                     Undo();
-                if (ImGui.IsKeyPressed(ImGuiKey.R))
+                if (ImGui.IsKeyPressed(ImGuiKey.Y))
                     Redo();
+
+                for (int i = 0; i < io.InputQueueCharacters.Size; i++)
+                {
+                    var ic = io.InputQueueCharacters[i];
+                    char c = (char)ic;
+                    L.Info($"Ignoring input char while Ctrl is held down: {c} (code {ic})");
+                }
             }
             else
             {
@@ -530,20 +545,7 @@ namespace StationeersIC10Editor
         {
             foreach (var window in InputSourceCode.Instance.HelpWindows)
                 if (window.HelpMode == mode)
-                {
-                    // InputSourceCode.Instance.Initialize();
-                    // L.Info($"Showing help window for mode {mode}");
-                    // var transform = window.GameObject.transform;
-                    // var parent = transform.parent;
-                    // L.Info($"New parent : {transform.parent}");
-                    // window.SetActive(true);
-                    // InputSourceCode.Instance.SetVisible(true);
-                    // window.SetVisible(true);
                     window.ToggleVisibility();
-                    // parent.gameObject.SetActive(true);
-                    // L.Info($"Window active self: {window.GameObject.activeSelf}");
-                    // L.Info($"Window active in hierarchy : {window.GameObject.activeInHierarchy}");
-                }
         }
 
         private bool _helpWindowVisible = false;
@@ -552,6 +554,11 @@ namespace StationeersIC10Editor
         {
             // rounded buttons style
             ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 5.0f);
+
+            if (ImGui.Button("Library", buttonSize))
+                ShowHelpWindow(HelpMode.Instructions);
+
+            ImGui.SameLine();
 
             if (ImGui.Button("Clear", buttonSize))
                 ClearCode();
@@ -571,6 +578,8 @@ namespace StationeersIC10Editor
 
             ImGui.SameLine();
 
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 2 * ImGui.GetStyle().ItemSpacing.x);
+
             if (ImGui.Button("Help", buttonSize))
                 _helpWindowVisible = !_helpWindowVisible;
 
@@ -581,7 +590,8 @@ namespace StationeersIC10Editor
 
             ImGui.SameLine();
 
-            ImGui.SetCursorPosX(ImGui.GetWindowWidth() - 3 * smallButtonSize.x - buttonSize.x - ImGui.GetStyle().FramePadding.x * 2 - ImGui.GetStyle().ItemSpacing.x * 3);
+            ImGui.SetCursorPosX(ImGui.GetWindowWidth() - 3 * smallButtonSize.x - buttonSize.x - ImGui.GetStyle().FramePadding.x * 3 - ImGui.GetStyle().ItemSpacing.x * 3);
+
 
             if (ImGui.Button("s(x)", smallButtonSize))
                 ShowHelpWindow(HelpMode.SlotVariables);
@@ -643,6 +653,7 @@ namespace StationeersIC10Editor
 
         private bool MouseIsInsideTextArea(Vector2 mousePos, Vector2 textOrigin, Vector2 availSize)
         {
+            L.Info($"MousePos: {mousePos}, TextOrigin: {textOrigin}, AvailSize: {availSize}");
             return mousePos.x >= textOrigin.x
                 && mousePos.x <= textOrigin.x + availSize.x
                 && mousePos.y >= textOrigin.y
@@ -670,7 +681,15 @@ namespace StationeersIC10Editor
 
             if (ImGui.IsMouseClicked(0)) // Left click
             {
-                if (MouseIsInsideTextArea(mousePos, textAreaOrigin, availSize))
+                // if (MouseIsInsideTextArea(mousePos, textAreaOrigin, availSize))
+
+                float mx = mousePos.x;
+                float my = mousePos.y;
+                float tx = textAreaOrigin.x;
+                float ty = textAreaOrigin.y + ImGui.GetScrollY();
+                float tw = availSize.x;
+                float th = scrollHeight;
+                if (mx >= tx && mx <= tx + tw && my >= ty && my <= ty + th)
                 {
                     CaretPos = GetTextPositionFromMouse(mousePos, textAreaOrigin);
                     Selection.Start = CaretPos;
@@ -690,8 +709,8 @@ namespace StationeersIC10Editor
                 float lineHeight = ImGui.GetTextLineHeightWithSpacing();
                 float lineSpacing = ImGui.GetStyle().ItemSpacing.y;
 
-                float scrollY = ImGui.GetScrollY();
                 float pageHeight = (Lines.Count * lineHeight) - ImGui.GetScrollMaxY();
+                float scrollY = ImGui.GetScrollY();
                 float viewTop = scrollY;
                 float viewBottom = scrollY + pageHeight;
 
@@ -756,17 +775,11 @@ namespace StationeersIC10Editor
         public void Draw()
         {
             if (!Show) return;
-            // InputSourceCode.Instance.CodeInputWindow.SetVisible(false);
-            // InputSourceCode.Instance.CodeInputWindow.SetActive(false);
-            // if(PanelInputSourceCode.Instance != null)
-            //   PanelInputSourceCode.Instance.gameObject.SetActive(false);
-            // InputSourceCode.Instance.SetVisible(false);
 
+            // make sure the native editor is hidden
             InputSourceCode.Instance.Window.localPosition = new Vector3(-10000, -10000, 0);
-            ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.1f, 0.1f, 0.1f, 1.0f));
-            ImGui.GetStyle().Colors[(int)ImGuiCol.WindowBg] = new Vector4(0.1f, 0.1f, 0.1f, 1.0f);
 
-            // ImGui.SetNextWindowCollapsed(true, ImGuiCond.Once); 
+            ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.1f, 0.1f, 0.1f, 1.0f));
 
             ImGui.Begin(Title);
 
@@ -812,10 +825,10 @@ namespace StationeersIC10Editor
                 ImGui.TextWrapped(
                     "Keyboard Shortcuts:\n" +
                     "\n" +
-                    // "- Ctrl+S:       Save and confirm changes\n" +
-                    // "- Ctrl+E:       Save + export code to chip\n" +
+                    "- Ctrl+S:       Save and confirm changes\n" +
+                    "- Ctrl+E:       Save + export code to ic chip\n" +
                     "- Ctrl+Z:       Undo\n" +
-                    "- Ctrl+R:       Redo\n" +
+                    "- Ctrl+Y:       Redo\n" +
                     "- Ctrl+C:       Copy selected code\n" +
                     "- Ctrl+V:       Paste code from clipboard\n" +
                     "- Ctrl+A:       Select all code\n" +
@@ -828,9 +841,9 @@ namespace StationeersIC10Editor
             }
         }
 
-        public void ResetCode(string code)
+        public void ResetCode(string code, bool pushUndo = true)
         {
-            ClearCode(false);
+            ClearCode(pushUndo);
             Lines.Clear();
             var lines = code.Split('\n');
             foreach (var line in lines)
