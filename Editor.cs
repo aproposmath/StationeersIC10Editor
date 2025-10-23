@@ -123,7 +123,7 @@ namespace StationeersIC10Editor
         }
 
         private bool Show = false;
-        private double blinkStartTime = 0.0;
+        private double timeLastAction = 0.0;
 
         public void SwitchToNativeEditor()
         {
@@ -179,6 +179,7 @@ namespace StationeersIC10Editor
                 if (_caretPos.Col > Lines[_caretPos.Line].Length)
                     _caretPos.Col = Lines[_caretPos.Line].Length;
                 ScrollToCaret = true;
+                timeLastAction = ImGui.GetTime();
             }
         }
 
@@ -267,7 +268,6 @@ namespace StationeersIC10Editor
                 Selection.Reset();
 
             CaretPos = newPos;
-            blinkStartTime = ImGui.GetTime();
         }
 
         public void SelectAll()
@@ -656,7 +656,7 @@ namespace StationeersIC10Editor
             L.Info($"MousePos: {mousePos}, TextOrigin: {textOrigin}, AvailSize: {availSize}");
             return mousePos.x >= textOrigin.x
                 && mousePos.x <= textOrigin.x + availSize.x
-                && mousePos.y >= textOrigin.y
+                && mousePos.y >= textOrigin.y + ImGui.GetScrollY()
                 && mousePos.y <= textOrigin.y + availSize.y;
         }
 
@@ -681,15 +681,7 @@ namespace StationeersIC10Editor
 
             if (ImGui.IsMouseClicked(0)) // Left click
             {
-                // if (MouseIsInsideTextArea(mousePos, textAreaOrigin, availSize))
-
-                float mx = mousePos.x;
-                float my = mousePos.y;
-                float tx = textAreaOrigin.x;
-                float ty = textAreaOrigin.y + ImGui.GetScrollY();
-                float tw = availSize.x;
-                float th = scrollHeight;
-                if (mx >= tx && mx <= tx + tw && my >= ty && my <= ty + th)
+                if (MouseIsInsideTextArea(mousePos, textAreaOrigin, availSize))
                 {
                     CaretPos = GetTextPositionFromMouse(mousePos, textAreaOrigin);
                     Selection.Start = CaretPos;
@@ -756,7 +748,7 @@ namespace StationeersIC10Editor
 
         public void DrawCaret(Vector2 pos)
         {
-            bool blinkOn = ((int)((ImGui.GetTime() - blinkStartTime) * 2) % 2) == 0;
+            bool blinkOn = ((int)((ImGui.GetTime() - timeLastAction) * 2) % 2) == 0;
 
             if (blinkOn)
             {
@@ -781,8 +773,6 @@ namespace StationeersIC10Editor
 
             ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.1f, 0.1f, 0.1f, 1.0f));
 
-            ImGui.Begin(Title);
-
             if (!IsInitialized)
             {
                 var displaySize = ImGui.GetIO().DisplaySize;
@@ -796,6 +786,8 @@ namespace StationeersIC10Editor
                 IsInitialized = true;
             }
 
+            ImGui.Begin(Title, ImGuiWindowFlags.NoSavedSettings);
+
             HandleInput();
 
             DrawHeader();
@@ -805,7 +797,8 @@ namespace StationeersIC10Editor
             ImGui.End();
             ImGui.PopStyleColor();
 
-            CodeFormatter.DrawTooltip(Lines[CaretLine], CaretPos, caretPixelPos);
+            if(ImGui.GetTime() - timeLastAction > 1.0)
+              CodeFormatter.DrawTooltip(Lines[CaretLine], CaretPos, caretPixelPos);
 
             DrawHelpWindow();
         }
@@ -815,7 +808,7 @@ namespace StationeersIC10Editor
             if (_helpWindowVisible)
             {
                 ImGui.SetNextWindowSize(new Vector2(600, 400), ImGuiCond.FirstUseEver);
-                ImGui.Begin("IC10 Editor Help", ref _helpWindowVisible);
+                ImGui.Begin("IC10 Editor Help", ref _helpWindowVisible, ImGuiWindowFlags.NoSavedSettings);
 
                 ImGui.TextWrapped(
                     "This is the IC10 Editor. It allows you to edit the source code of IC10 programs with syntax highlighting, undo/redo, and other features.");
