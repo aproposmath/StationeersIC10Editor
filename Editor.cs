@@ -16,8 +16,223 @@ namespace StationeersIC10Editor
         public double Timestamp;
     }
 
+    public enum MoveToken
+    {
+        Char,
+        Line,
+        WordBeginning,
+        WordEnd,
+    }
+
+    public struct MoveAction
+    {
+        public MoveToken Token;
+        public bool Forward;
+        public uint Amount;
+
+        public int Direction => Forward ? 1 : -1;
+        public int SignedAmount => (int)(Direction * Amount);
+
+
+        public MoveAction(MoveToken token = MoveToken.Char, bool forward = true, uint amount = 0)
+        {
+            Token = token;
+            Forward = forward;
+            Amount = amount;
+        }
+    }
+
     public class IC10Editor
     {
+        public static bool IsWordChar(char c)
+        {
+            return char.IsLetterOrDigit(c) || c == '_';
+        }
+
+        public bool IsWordBeginning(TextPosition pos)
+        {
+            if (pos.Col == 0)
+                return true;
+
+            var leftPos = new TextPosition(pos.Line, pos.Col - 1);
+            return !IsWordChar(this[leftPos]) && IsWordChar(this[pos]);
+        }
+
+        public bool IsWordEnd(TextPosition pos)
+        {
+            if (pos.Col == 0)
+                return false;
+
+            var leftPos = new TextPosition(pos.Line, pos.Col - 1);
+
+            return IsWordChar(this[leftPos]) && !IsWordChar(this[pos]);
+        }
+
+        public TextPosition FindWordBeginning(TextPosition pos, bool forward)
+        {
+            int dir = forward ? 1 : -1;
+            pos.Col += dir;
+            pos = WrapPos(pos);
+            while (!IsWordBeginning(pos))
+            {
+                pos.Col += dir;
+                pos = WrapPos(pos);
+                if (pos.Line == Lines.Count - 1 && pos.Col == Lines[pos.Line].Length)
+                    break;
+            }
+            return pos;
+        }
+
+        public TextPosition FindWordEnd(TextPosition pos, bool forward)
+        {
+            int dir = forward ? 1 : -1;
+            pos.Col += dir;
+            pos = WrapPos(pos);
+            while (!IsWordEnd(pos))
+            {
+                pos.Col++;
+                pos = WrapPos(pos);
+                if (pos.Line == 0 && pos.Col == 0)
+                    break;
+            }
+            return pos;
+        }
+
+        public TextPosition WrapPos(TextPosition pos)
+        {
+            if (pos.Col < 0 && pos.Line > 0)
+            {
+                pos.Line--;
+                pos.Col = Lines[pos.Line].Length;
+            }
+            if (pos.Col > Lines[pos.Line].Length && pos.Line < Lines.Count)
+            {
+                pos.Col = 0;
+                pos.Line++;
+            }
+
+            if (pos.Line < 0)
+                pos.Line = 0;
+            if (pos.Line >= Lines.Count)
+                pos.Line = Lines.Count - 1;
+
+            if (pos.Col < 0)
+                pos.Col = 0;
+            if (pos.Col > Lines[pos.Line].Length)
+                pos.Col = Lines[pos.Line].Length;
+
+            return pos;
+        }
+
+        public TextPosition MoveLines(TextPosition pos, int amount)
+        {
+            pos.Line += amount;
+            pos.Line = Math.Max(0, Math.Min(pos.Line, Lines.Count - 1));
+            return pos;
+        }
+
+        public TextPosition MoveChars(TextPosition startPos, int amount)
+        {
+            int dir = amount >= 0 ? 1 : -1;
+            amount = Math.Abs(amount);
+            TextPosition pos = startPos;
+            for (int i = 0; i < amount; i++)
+            {
+                pos.Col += dir;
+                pos = WrapPos(pos);
+            }
+
+            return pos;
+        }
+
+        public TextPosition FindWhitespace(TextPosition pos, bool forward = true)
+        {
+            // Move to the next whitespace or next line if there is none in this line
+            string line = Lines[pos.Line];
+            int dir = forward ? 1 : -1;
+            while (pos.Col < line.Length && pos.Col >= 0 && !char.IsWhiteSpace(line[pos.Col]))
+            {
+                pos.Col += dir;
+                if (pos.Col < 0)
+                    return WrapPos(pos);
+            }
+
+            return pos;
+        }
+
+        public TextPosition FindNonWhitespace(TextPosition pos, bool forward = true)
+        {
+            if (!char.IsWhiteSpace(this[pos]))
+                return pos;
+
+            int dir = forward ? 1 : -1;
+            string line = Lines[pos.Line];
+
+            while (pos.Col < line.Length && pos.Col >= 0 && char.IsWhiteSpace(this[pos]))
+                pos.Col += dir;
+
+            pos = WrapPos(pos);
+            return pos;
+        }
+
+        public TextPosition FindNextWord(TextPosition startPos, bool forward = true)
+        {
+            TextPosition pos = startPos;
+            if (char.IsWhiteSpace(this[pos]))
+                return FindNonWhitespace(pos, forward);
+
+            pos = FindWhitespace(pos, forward);
+            return FindNonWhitespace(pos, forward);
+        }
+
+
+        public char this[TextPosition pos]
+        {
+            get
+            {
+                var line = Lines[pos.Line];
+                if (pos.Col == line.Length)
+                    return '\n';
+                return line[pos.Col];
+            }
+        }
+
+        public TextPosition Move(TextPosition startPos, MoveAction action)
+        {
+            if (action.Amount == 0)
+                return startPos;
+
+            if (action.Token == MoveToken.Char)
+                return MoveChars(startPos, action.SignedAmount);
+
+            if (action.Token == MoveToken.Line)
+            {
+                var newLine = startPos.Line + action.SignedAmount;
+                if (newLine < 0)
+                    newLine = 0;
+                if (newLine >= Lines.Count)
+                    newLine = Lines.Count - 1;
+                return new TextPosition(newLine, startPos.Col);
+            }
+
+            if (action.Token == MoveToken.WordBeginning)
+            {
+                var pos = startPos;
+                for (int i = 0; i < action.Amount; i++)
+                    pos = FindWordBeginning(startPos, action.Forward);
+                return pos;
+            }
+            if (action.Token == MoveToken.WordEnd)
+            {
+                var pos = startPos;
+                for (int i = 0; i < action.Amount; i++)
+                    pos = FindWordEnd(startPos, action.Forward);
+                return pos;
+            }
+
+            throw new NotImplementedException($"Move not implemented for token {action.Token}");
+        }
+
         public static bool UseNativeEditor = false;
 
         private ProgrammableChipMotherboard _pcm;
@@ -31,7 +246,6 @@ namespace StationeersIC10Editor
             Lines = new List<string>();
             Lines.Add("");
             CaretPos = new TextPosition(0, 0);
-            L.Info("Creating IC10 Editor");
             _pcm = pcm;
         }
 
@@ -128,7 +342,6 @@ namespace StationeersIC10Editor
         public void SwitchToNativeEditor()
         {
             UseNativeEditor = true;
-            L.Info("Switching to native IC10 editor");
             Show = false;
 
             // localPosition was set to -10000,-10000,0 to hide the native editor, so set it back to 0,0,0 to show it
@@ -139,7 +352,6 @@ namespace StationeersIC10Editor
 
         public void HideWindow()
         {
-            L.Info("Hiding IC10 Editor window");
             Show = false;
             KeyManager.RemoveInputState("ic10editorinputstate");
             if (InputWindow.InputState == InputPanelState.Waiting)
@@ -151,9 +363,7 @@ namespace StationeersIC10Editor
 
         public void ShowWindow()
         {
-            L.Info("Showing IC10 Editor window");
             Show = true;
-            L.Info($"Current code {Code}");
             KeyManager.SetInputState("ic10editorinputstate", KeyInputState.Typing);
             if (!WorldManager.IsGamePaused)
                 InputSourceCode.Instance.PauseGameToggle(true);
@@ -409,11 +619,6 @@ namespace StationeersIC10Editor
 
         public void HandleInput()
         {
-            foreach (ImGuiKey key in Enum.GetValues(typeof(ImGuiKey)))
-            {
-                if (key != ImGuiKey.COUNT && ImGui.IsKeyPressed(key))
-                    L.Info($"Imgui Pressed: {key}");
-            }
             var io = ImGui.GetIO();
             io.ConfigWindowsMoveFromTitleBarOnly = true;
             bool ctrlDown = io.KeyCtrl || Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
@@ -447,7 +652,6 @@ namespace StationeersIC10Editor
                 {
                     var ic = io.InputQueueCharacters[i];
                     char c = (char)ic;
-                    L.Info($"Ignoring input char while Ctrl is held down: {c} (code {ic})");
                 }
             }
             else
@@ -501,23 +705,6 @@ namespace StationeersIC10Editor
                     MoveCaret(0, CaretLine + 1, false);
                 }
 
-                if (ImGui.IsKeyPressed(ImGuiKey.LeftArrow))
-                    CaretLeft();
-                if (ImGui.IsKeyPressed(ImGuiKey.RightArrow))
-                    CaretRight();
-                if (ImGui.IsKeyPressed(ImGuiKey.UpArrow))
-                    CaretUp();
-                if (ImGui.IsKeyPressed(ImGuiKey.DownArrow))
-                    CaretDown();
-                if (ImGui.IsKeyPressed(ImGuiKey.Home))
-                    CaretToStartOfLine();
-                if (ImGui.IsKeyPressed(ImGuiKey.End))
-                    CaretToEndOfLine();
-                if (ImGui.IsKeyPressed(ImGuiKey.PageUp))
-                    CaretUp(20);
-                if (ImGui.IsKeyPressed(ImGuiKey.PageDown))
-                    CaretDown(20);
-
                 string input = string.Empty;
                 for (int i = 0; i < io.InputQueueCharacters.Size; i++)
                 {
@@ -536,6 +723,43 @@ namespace StationeersIC10Editor
                     CaretCol += input.Length;
                 }
             }
+
+            // check for move actions
+            TextPosition newPos = new TextPosition(-1, -1);
+
+            var arrowMoveToken = ctrlDown ? MoveToken.WordBeginning : MoveToken.Char;
+
+            if (ImGui.IsKeyPressed(ImGuiKey.LeftArrow))
+                newPos = Move(CaretPos, new MoveAction(arrowMoveToken, false, 1));
+            if (ImGui.IsKeyPressed(ImGuiKey.RightArrow))
+                newPos = Move(CaretPos, new MoveAction(arrowMoveToken, true, 1));
+            if (ImGui.IsKeyPressed(ImGuiKey.UpArrow))
+                newPos = Move(CaretPos, new MoveAction(MoveToken.Line, false, 1));
+            if (ImGui.IsKeyPressed(ImGuiKey.DownArrow))
+                newPos = Move(CaretPos, new MoveAction(MoveToken.Line, true, 1));
+            if (ImGui.IsKeyPressed(ImGuiKey.Home))
+                newPos = new TextPosition(CaretPos.Line, 0);
+            if (ImGui.IsKeyPressed(ImGuiKey.End))
+                newPos = new TextPosition(CaretPos.Line, Lines[CaretPos.Line].Length);
+            if (ImGui.IsKeyPressed(ImGuiKey.PageUp))
+                newPos = Move(CaretPos, new MoveAction(MoveToken.Line, false, 20));
+            if (ImGui.IsKeyPressed(ImGuiKey.PageDown))
+                newPos = Move(CaretPos, new MoveAction(MoveToken.Line, true, 20));
+
+            if ((bool)newPos)
+            {
+                if (shiftDown)
+                {
+                    if (!(bool)Selection.Start)
+                        Selection.Start = CaretPos;
+                    Selection.End = newPos;
+                }
+                else
+                    Selection.Reset();
+
+                CaretPos = newPos;
+            }
+
         }
 
         private Vector2 buttonSize = new Vector2(85, 0);
@@ -640,7 +864,6 @@ namespace StationeersIC10Editor
 
         public void Confirm()
         {
-            L.Info("Confirming IC10 Editor changes");
             _pcm.InputFinished(Code);
             HideWindow();
         }
@@ -651,23 +874,26 @@ namespace StationeersIC10Editor
             _pcm.Export();
         }
 
-        private bool MouseIsInsideTextArea(Vector2 mousePos, Vector2 textOrigin, Vector2 availSize)
+        private Vector2 _textAreaOrigin, _textAreaSize, _scrollY;
+
+        private bool MouseIsInsideTextArea()
         {
-            L.Info($"MousePos: {mousePos}, TextOrigin: {textOrigin}, AvailSize: {availSize}");
-            return mousePos.x >= textOrigin.x
-                && mousePos.x <= textOrigin.x + availSize.x
-                && mousePos.y >= textOrigin.y + ImGui.GetScrollY()
-                && mousePos.y <= textOrigin.y + availSize.y;
+            Vector2 mousePos = ImGui.GetMousePos();
+            return mousePos.x >= _textAreaOrigin.x
+                && mousePos.x <= _textAreaOrigin.x + _textAreaSize.x
+                && mousePos.y >= _textAreaOrigin.y
+                && mousePos.y <= _textAreaOrigin.y + _textAreaSize.y;
         }
 
-        private Vector2 caretPixelPos;
+        private Vector2 _caretPixelPos;
+        private bool _hadDoubleClick = false;
 
         public unsafe void DrawCodeArea()
         {
-            Vector2 availSize = ImGui.GetContentRegionAvail();
+            _textAreaSize = ImGui.GetContentRegionAvail();
             float statusLineHeight = ImGui.GetTextLineHeightWithSpacing() * 2;
             float scrollHeight =
-                availSize.y - statusLineHeight - (ImGui.GetStyle().FramePadding.y * 2);
+                _textAreaSize.y - statusLineHeight - (ImGui.GetStyle().FramePadding.y * 2);
 
             ImGui.BeginChild("ScrollRegion", new Vector2(0, scrollHeight), true);
 
@@ -676,24 +902,39 @@ namespace StationeersIC10Editor
 
             clipper.Begin(Lines.Count);
 
-            Vector2 textAreaOrigin = ImGui.GetCursorScreenPos(); // Store this before drawing lines
+            _textAreaOrigin = ImGui.GetCursorScreenPos();
+            _textAreaOrigin.y += ImGui.GetScrollY();
             Vector2 mousePos = ImGui.GetMousePos();
 
-            if (ImGui.IsMouseClicked(0)) // Left click
+            if (MouseIsInsideTextArea())
             {
-                if (MouseIsInsideTextArea(mousePos, textAreaOrigin, availSize))
+                if (ImGui.IsMouseDoubleClicked(0))
                 {
-                    CaretPos = GetTextPositionFromMouse(mousePos, textAreaOrigin);
-                    Selection.Start = CaretPos;
+                    _hadDoubleClick = true;
+                    var clickPos = GetTextPositionFromMouse();
+
+                    bool isWordChar = IsWordChar(this[clickPos]);
+
+                    var startPos = FindWordBeginning(clickPos, !isWordChar);
+                    var endPos = FindWordEnd(clickPos, isWordChar);
+
+                    Selection.Start = startPos;
+                    Selection.End = endPos;
+                    CaretPos = endPos;
+                }
+                else if (ImGui.IsMouseClicked(0)) // Left click
+                {
+                    _hadDoubleClick = false;
+                    var clickPos = GetTextPositionFromMouse();
+                    CaretPos = clickPos;
+                    Selection.Start = clickPos;
                     Selection.End.Reset();
                 }
-                else
-                    Selection.Reset();
             }
 
-            if ((bool)Selection.Start && (ImGui.IsMouseDown(0) || ImGui.IsMouseReleased(0)))
+            if (!_hadDoubleClick && (bool)Selection.Start && (ImGui.IsMouseDown(0) || ImGui.IsMouseReleased(0)))
             {
-                Selection.End = GetTextPositionFromMouse(mousePos, textAreaOrigin);
+                Selection.End = GetTextPositionFromMouse();
             }
 
             if (ScrollToCaret)
@@ -722,8 +963,6 @@ namespace StationeersIC10Editor
                 ScrollToCaret = false;
             }
 
-            caretPixelPos = textAreaOrigin;
-
             var selection = Selection.Sorted();
             while (clipper.Step())
             {
@@ -731,9 +970,9 @@ namespace StationeersIC10Editor
                 {
                     if (i == CaretLine)
                     {
-                        caretPixelPos = ImGui.GetCursorScreenPos();
-                        caretPixelPos.x += ImGui.CalcTextSize("M").x * (CaretCol + ICodeFormatter.LineNumberOffset);
-                        DrawCaret(caretPixelPos);
+                        _caretPixelPos = ImGui.GetCursorScreenPos();
+                        _caretPixelPos.x += ImGui.CalcTextSize("M").x * (CaretCol + ICodeFormatter.LineNumberOffset);
+                        DrawCaret(_caretPixelPos);
                     }
 
                     CodeFormatter.DrawLine(i, Lines[i], selection);
@@ -797,8 +1036,8 @@ namespace StationeersIC10Editor
             ImGui.End();
             ImGui.PopStyleColor();
 
-            if(ImGui.GetTime() - timeLastAction > 1.0)
-              CodeFormatter.DrawTooltip(Lines[CaretLine], CaretPos, caretPixelPos);
+            if (ImGui.GetTime() - timeLastAction > 1.0)
+                CodeFormatter.DrawTooltip(Lines[CaretLine], CaretPos, _caretPixelPos);
 
             DrawHelpWindow();
         }
@@ -828,7 +1067,10 @@ namespace StationeersIC10Editor
                     "- Ctrl+X:       Cut selected code\n" +
                     "- Arrow Keys:   Move caret\n" +
                     "- Home/End:     Move caret to start/end of line\n" +
-                    "- Page Up/Down: Move caret up/down by 20 lines");
+                    "- Page Up/Down: Move caret up/down by 20 lines\n" +
+                    "- Shift+Arrow:  Select text while moving caret\n" +
+                    "- Ctrl+Arrow:   Move caret by word\n"
+                    );
 
                 ImGui.End();
             }
@@ -848,14 +1090,15 @@ namespace StationeersIC10Editor
         }
 
 
-        private TextPosition GetTextPositionFromMouse(Vector2 mousePos, Vector2 origin)
+        private TextPosition GetTextPositionFromMouse()
         {
+            Vector2 mousePos = ImGui.GetMousePos();
             float charWidth = ImGui.CalcTextSize("M").x;
             float lineHeight = ImGui.GetTextLineHeightWithSpacing();
 
-            int line = (int)((mousePos.y - origin.y) / lineHeight);
+            int line = (int)((mousePos.y - _textAreaOrigin.y) / lineHeight);
             int column =
-                (int)((mousePos.x - origin.x) / charWidth) - ICodeFormatter.LineNumberOffset;
+                (int)((mousePos.x - _textAreaOrigin.x) / charWidth) - ICodeFormatter.LineNumberOffset;
 
             line = Mathf.Clamp(line, 0, Lines.Count - 1);
             string lineText = Lines[line];
