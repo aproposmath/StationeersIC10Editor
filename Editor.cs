@@ -1274,7 +1274,15 @@ public class EditorWindow
     private int _activeTabIndex = 0;
     private int _activeEditorIndex = 0;
     public EditorTab ActiveTab => Tabs[_activeTabIndex];
-    public Editor ActiveEditor => ActiveTab[_activeEditorIndex];
+    public Editor ActiveEditor
+    {
+        get
+        {
+            if (_activeEditorIndex < 0 || _activeEditorIndex >= ActiveTab.Editors.Count)
+                _activeEditorIndex = 0;
+            return ActiveTab[_activeEditorIndex];
+        }
+    }
 
     public void SetActiveEditor(int editorIndex)
     {

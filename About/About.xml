@@ -2,7 +2,7 @@
 <ModMetadata xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Name>IC10 Editor</Name>
   <Author>aproposmath</Author>
-  <Version>0.7.2</Version>
+  <Version>0.7.3</Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
 
@@ -32,13 +32,9 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        0.7.2:
+        0.7.3:
 
-        - Multiple fixes
-        - Collapse instead of move Window if game window (Stationpedia etc.) is opened (configurable in menu)
-        - Show jump location (purple separator line)
-        - Support for line highlight (separation line or background color)
-        - Support for side-by-side editor tabs (used in compiler mods like Slang)
+        - Fix exception when switching from slang to IC10
 
   </ChangeLog>
   <WorkshopHandle>3592775931</WorkshopHandle>
