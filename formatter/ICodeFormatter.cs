@@ -232,10 +232,13 @@ public abstract class ICodeFormatter
 
         if (drawLineNumber)
         {
+            int lineNumber = lineIndex;
+            if (RelativeLineNumbers && lineNumber != CaretPos.Line)
+                lineNumber = Math.Abs(lineNumber - CaretPos.Line);
             drawList.AddText(
                 pos,
                 ICodeFormatter.ColorLineNumber,
-                lineIndex.ToString().PadLeft(3) + "."
+                lineNumber.ToString().PadLeft(3) + "."
             );
             pos.x += ICodeFormatter.LineNumberOffset * CharWidth;
         }

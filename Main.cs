@@ -56,6 +56,7 @@ public class IC10EditorPlugin : BaseUnityPlugin
     public static ConfigEntry<float> TooltipDelay;
     public static ConfigEntry<int> LineSpacingOffset;
     public static ConfigEntry<bool> CollapseOnGameWindow;
+    public static ConfigEntry<bool> RelativeLineNumbers;
 
     private void BindAllConfigs()
     {
@@ -112,6 +113,12 @@ public class IC10EditorPlugin : BaseUnityPlugin
             "CollapseOnGameWindow",
             true,
             "Automatically collapse the IC10 editor when Stationpedia or other game windows are opened"
+        );
+        RelativeLineNumbers = Config.Bind(
+            "General",
+            "RelativeLineNumbers",
+            false,
+            "Show relative line numbers"
         );
     }
 

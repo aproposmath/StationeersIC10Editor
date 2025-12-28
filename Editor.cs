@@ -146,6 +146,7 @@ public static class Settings
     public static bool EnableAutoComplete => IC10EditorPlugin.EnableAutoComplete.Value;
     public static int LineSpacingOffset => IC10EditorPlugin.LineSpacingOffset.Value;
     public static bool CollapseOnGameWindow => IC10EditorPlugin.CollapseOnGameWindow.Value;
+    public static bool RelativeLineNumbers => IC10EditorPlugin.RelativeLineNumbers.Value;
 
     public static Vector2 buttonSize => Scale * new Vector2(85, 0);
     public static Vector2 smallButtonSize => Scale * new Vector2(50, 0);
@@ -2073,6 +2074,7 @@ public class EditorWindow
             "Auto Completion (insert with Tab key)",
             IC10EditorPlugin.EnableAutoComplete
         );
+        DrawBoolOption("Relative line numbers", IC10EditorPlugin.RelativeLineNumbers);
         ImGui.Checkbox("Show debug window", ref _debugWindowVisible);
 
         ImGui.Separator();
