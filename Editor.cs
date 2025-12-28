@@ -766,6 +766,7 @@ public class Editor
     {
         if (!(bool)range)
             return "";
+        range = range.Sorted();
         if (range.Start == range.End)
             return "";
         var start = range.Start;
@@ -862,6 +863,7 @@ public class Editor
         }
 
         CaretPos = start;
+        Selection.Reset();
         return true;
     }
 

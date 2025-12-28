@@ -15,7 +15,8 @@ using static Settings;
 public enum KeyMode
 {
     Insert,
-    VimNormal
+    VimNormal,
+    VimVisual
 }
 
 public class VimCommand
@@ -90,6 +91,7 @@ public class VimCommand
     private static readonly string _singleCharCommands = "cdry";
     private static readonly string _twoCharCommands = "dd yy cc gg gf << >> ";
     private static readonly string _lineCommands = "/:?"; // commands that read argument until Enter is pressed
+    private static readonly string _visualCommands = "dd cc yy xJ";
 
     private static readonly string _validFirstChars = _immediateSingleCharCommands + _singleCharCommands + "gft:<>";
 
@@ -113,30 +115,36 @@ public class VimCommand
         }
     }
 
-    public bool IsComplete
+    public bool IsComplete(KeyMode mode, TextRange selection)
     {
-        get
+        if (mode == KeyMode.VimVisual || (bool)selection)
         {
-            if (Command == "gf")
+            string cmd = ToString();
+            if (Command == cmd && cmd.Length == 1 && "dcy".Contains(cmd))
+            {
+                Command = cmd + cmd;
                 return true;
-
-            if (IsLineCommand)
-                return Argument.EndsWith("\n");
-
-            if (Movement != '\0')
-                return (Movement != 'f' && Movement != 't') || Argument.Length == 1;
-
-            if (Command.Length == 1)
-                if (_immediateSingleCharCommands.Contains(Command))
-                    return true;
-                else
-                    return _singleCharCommands.Contains(Command) && Argument.Length == 1;
-
-            if (Command.Length == 2)
-                return _twoCharCommands.Contains(Command + " ");
-
-            return false;
+            }
         }
+        if (Command == "gf")
+            return true;
+
+        if (IsLineCommand)
+            return Argument.EndsWith("\n");
+
+        if (Movement != '\0')
+            return (Movement != 'f' && Movement != 't') || Argument.Length == 1;
+
+        if (Command.Length == 1)
+            if (_immediateSingleCharCommands.Contains(Command))
+                return true;
+            else
+                return _singleCharCommands.Contains(Command) && Argument.Length == 1;
+
+        if (Command.Length == 2)
+            return _twoCharCommands.Contains(Command + " ");
+
+        return false;
     }
 
     public TextRange CaretAfterMove(Editor ed)
@@ -236,19 +244,41 @@ public class VimCommand
         return ed.Clamp(new TextRange(startPos, pos));
     }
 
-    public string Execute(Editor editor)
+    public string Execute(Editor editor, KeyMode mode)
     {
         TextRange range;
-        if (editor.HaveSelection)
-            range = editor.Clamp(editor.Selection.Sorted());
-        else
+        if (mode == KeyMode.VimVisual)
+        {
+            if (!_visualCommands.Contains(Command))
+                return null;
             range = CaretAfterMove(editor);
+            editor.Selection.End = range.End;
+            if (editor.Selection.Start > editor.Selection.End)
+            {
+                editor.Selection.End.Col = 0;
+                editor.Selection.Start.Col = editor.Lines[editor.Selection.Start.Line].Length + 1;
+            }
+            else
+            {
+                editor.Selection.End.Col = editor.Lines[range.End.Line].Length + 1;
+                editor.Selection.Start.Col = 0;
+            }
+
+            if (!IsMovement)
+                range = editor.Selection.Sorted();
+        }
+        else
+        {
+            if (editor.HaveSelection)
+                range = editor.Clamp(editor.Selection.Sorted());
+            else
+                range = CaretAfterMove(editor);
+        }
 
         string status = null;
         var nLines = range.End.Line - range.Start.Line + 1;
         if (range.Start.Col > 0 || range.End.Col <= editor.Lines[range.End.Line].Length)
         {
-            nLines = 0;
             // if we copy partial lines, adjust the range end to not include a newline char
             if (!IsMovement && range.End.Col == 0 && range.End.Line > range.Start.Line)
             {
@@ -852,21 +882,32 @@ public class KeyHandler
     public void CheckCommand()
     {
         CommandStatus = CurrentCommand.ToString();
-        if (CurrentCommand.IsComplete)
+        if (CurrentCommand.IsComplete(Mode, Editor.Selection))
         {
-            CommandStatus = CurrentCommand.Execute(Editor);
+            if (Mode == KeyMode.VimVisual && !CurrentCommand.IsMovement && CurrentCommand.Movement != '\0')
+            {
+                Editor.Selection.Reset();
+                CurrentCommand.Reset();
+                return;
+            }
+            CommandStatus = CurrentCommand.Execute(Editor, Mode);
             if (CurrentCommand.IsFind)
                 LastFindCommand = CurrentCommand.Clone();
             else if (CurrentCommand.IsSearch)
                 LastSearchCommand = CurrentCommand.Clone();
             else if (!CurrentCommand.IsMovement)
+            {
+                if (Mode == KeyMode.VimVisual)
+                    Mode = KeyMode.VimNormal;
                 LastCommand = CurrentCommand.Clone();
-            Editor.Selection.Reset();
+            }
+            if (Mode != KeyMode.VimVisual)
+                Editor.Selection.Reset();
             CurrentCommand.Reset();
         }
     }
 
-    public void HandleVimNormalMode(bool ctrlDown, bool shiftDown)
+    public void HandleVimNormalVisualMode(bool ctrlDown, bool shiftDown)
     {
         var io = ImGui.GetIO();
 
@@ -894,9 +935,19 @@ public class KeyHandler
 
         }
 
+        if (shiftDown && !ctrlDown && Input.GetKeyDown(KeyCode.V))
+        {
+            OnKeyPressed("Shift+V - to Visual Line mode");
+            Mode = KeyMode.VimVisual;
+            Editor.Selection.Start = new TextPosition(CaretLine, 0);
+            Editor.Selection.End = new TextPosition(CaretLine + 1, 0);
+            CurrentCommand.Reset();
+        }
+
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             CurrentCommand.Reset();
+            Mode = KeyMode.VimNormal;
         }
 
         if (Input.GetKeyDown(KeyCode.Backspace))
@@ -938,29 +989,29 @@ public class KeyHandler
 
             if (CurrentCommand.IsEmpty)
             {
-                if (c == '.')
+                if (c == '.' && Mode == KeyMode.VimNormal)
                 {
-                    if (LastCommand.IsComplete)
-                        CommandStatus = LastCommand.Execute(Editor);
+                    if (LastCommand.IsComplete(Mode, Editor.Selection))
+                        CommandStatus = LastCommand.Execute(Editor, Mode);
                     continue;
                 }
 
                 if (c == ';')
                 {
-                    if (LastFindCommand.IsComplete)
-                        CommandStatus = LastFindCommand.Execute(Editor);
+                    if (LastFindCommand.IsComplete(Mode, Editor.Selection))
+                        CommandStatus = LastFindCommand.Execute(Editor, Mode);
                     continue;
                 }
 
                 if (c == 'n')
                 {
-                    if (LastSearchCommand.IsComplete)
-                        CommandStatus = LastSearchCommand.Execute(Editor);
+                    if (LastSearchCommand.IsComplete(Mode, Editor.Selection))
+                        CommandStatus = LastSearchCommand.Execute(Editor, Mode);
                     continue;
                 }
                 if (c == 'N')
                 {
-                    if (LastSearchCommand.IsComplete)
+                    if (LastSearchCommand.IsComplete(Mode, Editor.Selection))
                     {
                         var cmd = LastSearchCommand.Clone();
                         char s = cmd.Command[0];
@@ -982,7 +1033,7 @@ public class KeyHandler
                                 CommandStatus = "Cannot reverse last search command";
                                 continue;
                         }
-                        CommandStatus = cmd.Execute(Editor);
+                        CommandStatus = cmd.Execute(Editor, Mode);
                     }
                     continue;
                 }
@@ -1009,7 +1060,7 @@ public class KeyHandler
 
         if (Mode == KeyMode.Insert)
             HandleInsertMode();
-        if (Mode == KeyMode.VimNormal)
-            HandleVimNormalMode(ctrlDown, shiftDown);
+        if (Mode == KeyMode.VimNormal || Mode == KeyMode.VimVisual)
+            HandleVimNormalVisualMode(ctrlDown, shiftDown);
     }
 }

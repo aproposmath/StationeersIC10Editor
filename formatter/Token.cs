@@ -3,6 +3,7 @@ namespace StationeersIC10Editor;
 using System.Collections.Generic;
 
 using ImGuiNET;
+
 using UnityEngine;
 
 using static Settings;
