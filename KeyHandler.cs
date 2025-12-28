@@ -746,11 +746,8 @@ public class KeyHandler
         }
     }
 
-    public void HandleInsertMode(bool ctrlDown, bool shiftDown)
+    public void HandleInsertMode()
     {
-        if (ctrlDown)
-            return;
-
         var io = ImGui.GetIO();
 
         if (VimEnabled && ImGui.IsKeyPressed(ImGuiKey.Escape))
@@ -1011,7 +1008,7 @@ public class KeyHandler
         HandleCommon(ctrlDown, shiftDown);
 
         if (Mode == KeyMode.Insert)
-            HandleInsertMode(ctrlDown, shiftDown);
+            HandleInsertMode();
         if (Mode == KeyMode.VimNormal)
             HandleVimNormalMode(ctrlDown, shiftDown);
     }
