@@ -252,18 +252,8 @@ public class VimCommand
             if (!_visualCommands.Contains(Command))
                 return null;
             range = CaretAfterMove(editor);
-            editor.Selection.End = range.End;
-            if (editor.Selection.Start > editor.Selection.End)
-            {
-                editor.Selection.End.Col = 0;
-                editor.Selection.Start.Col = editor.Lines[editor.Selection.Start.Line].Length + 1;
-            }
-            else
-            {
-                editor.Selection.End.Col = editor.Lines[range.End.Line].Length + 1;
-                editor.Selection.Start.Col = 0;
-            }
-
+            editor.CaretPos = range.End;
+            editor.KeyHandler.UpdateVisualSelection();
             if (!IsMovement)
                 range = editor.Selection.Sorted();
         }
@@ -471,6 +461,7 @@ public class VimCommand
                 }
                 break;
         }
+        editor.KeyHandler.UpdateVisualSelection();
         return status;
     }
 }
@@ -907,6 +898,26 @@ public class KeyHandler
         }
     }
 
+    public void UpdateVisualSelection()
+    {
+        if (Mode == KeyMode.VimVisual)
+        {
+            Editor.Selection.End = CaretPos;
+            var n0 = Editor.Selection.Start.Line;
+            var n1 = Editor.Selection.End.Line;
+            if(n0 < n1)
+            {
+                Editor.Selection.Start.Col = 0;
+                Editor.Selection.End.Col = Editor.Lines[n1].Length + 1;
+            }
+            else
+            {
+                Editor.Selection.End.Col = 0;
+                Editor.Selection.Start.Col = Editor.Lines[n0].Length + 1;
+            }
+        }
+    }
+
     public void HandleVimNormalVisualMode(bool ctrlDown, bool shiftDown)
     {
         var io = ImGui.GetIO();
@@ -920,11 +931,13 @@ public class KeyHandler
             {
                 OnKeyPressed("Ctrl+U");
                 CaretPos = Move(CaretPos, new MoveAction(MoveToken.Line, false, 20));
+                UpdateVisualSelection();
             }
             if (Input.GetKeyDown(KeyCode.D))
             {
                 OnKeyPressed("Ctrl+D");
                 CaretPos = Move(CaretPos, new MoveAction(MoveToken.Line, true, 20));
+                UpdateVisualSelection();
             }
             if (Input.GetKeyDown(KeyCode.R))
             {
