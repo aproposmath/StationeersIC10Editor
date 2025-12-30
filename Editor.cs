@@ -1212,9 +1212,11 @@ public class EditorTab
 {
     public List<Editor> Editors;
     public string Title;
+    public EditorWindow ParentWindow;
 
-    public EditorTab(Editor editor, string title)
+    public EditorTab(EditorWindow window, Editor editor, string title)
     {
+        ParentWindow = window;
         editor.ParentTab = this;
         Editors = new List<Editor> { editor };
         Title = title;
@@ -1310,13 +1312,15 @@ public class EditorWindow
     public EditorWindow(ProgrammableChipMotherboard pcm)
     {
         KeyHandler = new KeyHandler(this);
-        Tabs.Add(new EditorTab(new Editor(KeyHandler, pcm), "Motherboard"));
+        Tabs.Add(new EditorTab(this, new Editor(KeyHandler, pcm), "Motherboard"));
     }
 
     private bool Show = false;
 
     private Dictionary<string, InstructionData> _libraryCodes =
         new Dictionary<string, InstructionData>();
+
+    Dictionary<string, InstructionData> LibraryCodes => _libraryCodes;
     private List<InstructionData> _librarySearchResults = new List<InstructionData>();
 
     private bool _librarySearchVisible = false;
@@ -1326,7 +1330,7 @@ public class EditorWindow
     private bool _librarySearchJustOpened = false;
     private int _librarySelectedIndex = -1;
 
-    public async UniTaskVoid LoadLibraries()
+    public async UniTask LoadLibraries()
     {
         var items = await NetworkManager.GetLocalAndWorkshopItems(
             SteamTransport.WorkshopType.ICCode
@@ -1537,7 +1541,7 @@ public class EditorWindow
 
         var editor = new Editor(KeyHandler, lib);
         editor.ResetCode(lib.Instructions);
-        Tabs.Add(new EditorTab(editor, lib.Title));
+        Tabs.Add(new EditorTab(this, editor, lib.Title));
         _activeTabIndex = Tabs.Count - 1;
     }
 

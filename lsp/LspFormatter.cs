@@ -94,8 +94,21 @@ public class LSPFormatter : ICodeFormatter
         UpdateAutocompleteAsync();
     }
 
+    TextPosition _lastCompletePos = new TextPosition(-1, -1);
+    int _lastCompleteVersion = -1;
+
     public async void UpdateAutocompleteAsync()
     {
+        if (Version != _lastCompleteVersion || CaretPos != _lastCompletePos)
+        {
+            _lastCompleteVersion = Version;
+            _lastCompletePos = CaretPos;
+        }
+        else
+        {
+            L.Debug("Skipping autocomplete request, position and version unchanged");
+            return;
+        }
         int versionBefore = Version;
         var p = new TextPosition(Editor.CaretLine, Editor.CaretCol - 1);
         var currentWord = "";

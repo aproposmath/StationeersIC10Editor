@@ -178,6 +178,7 @@ public class LspClient
             OnInfo("Server capabilities:\n" + caps.ToString(Formatting.None));
 
         _isInitialized.Set();
+        await UniTask.SwitchToMainThread();
         OnInitialized();
         L.Debug("LSP Client is initialized.");
 
