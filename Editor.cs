@@ -321,7 +321,7 @@ public class Editor
         float px = _textAreaOrigin.x;
         float py = _textAreaOrigin.y + ImGui.GetStyle().FramePadding.y;
         return mousePos.x >= px
-            && mousePos.x <= px + _textAreaSize.x
+            && mousePos.x <= px + _textAreaSize.x  - ImGui.GetStyle().ScrollbarSize
             && mousePos.y >= py
             && mousePos.y <= py + _textAreaSize.y;
     }
