@@ -2,7 +2,7 @@
 <ModMetadata xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Name>IC10 Editor</Name>
   <Author>aproposmath</Author>
-  <Version>0.7.4</Version>
+  <Version>0.7.5</Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
 
@@ -32,11 +32,10 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        0.7.4:
+        0.7.5:
 
-        - Fix AltGr key combos for non-english keyboard layouts
-        - Visual vim mode (Shift+V)
-        - Relative line numbers (optional, enable in config menu)
+        - Only reset code on editor open if necessary (keeps scroll position/caret pos now on reopen)
+        - Don't trigger text selection when clicking/scrolling using the scroll bar
 
   </ChangeLog>
   <WorkshopHandle>3592775931</WorkshopHandle>
