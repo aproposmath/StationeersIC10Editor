@@ -139,6 +139,7 @@ public class IC10EditorPlugin : BaseUnityPlugin
             CodeFormatters.RegisterFormatter("IC10", typeof(IC10.IC10CodeFormatter), true);
             // CodeFormatters.RegisterFormatter("C#", typeof(CSharpFormatter));
             // CodeFormatters.RegisterFormatter("Python", typeof(ImGuiEditor.LSP.LSPFormatter));
+            CodeFormatters.RegisterFormatter("IC10-LSP", typeof(ImGuiEditor.LSP.IC10LSPFormatter));
         }
         catch (Exception ex)
         {

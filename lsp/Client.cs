@@ -499,6 +499,9 @@ public class LspClient : IDisposable
                     type: (uint)result.data[i + 3],
                     style: colorMap[result.data[i + 3] % nColors]
                 ));
+                // L.Info(
+                //     $"Semantic Token: Line {tokens[tokens.Count - 1].Line}, Col {tokens[tokens.Count - 1].Column}, Length {tokens[tokens.Count - 1].Length}, Type {tokens[tokens.Count - 1].Type}"
+                // );
 
                 prevLine = tokens[tokens.Count - 1].Line;
                 prevCol = tokens[tokens.Count - 1].Column;

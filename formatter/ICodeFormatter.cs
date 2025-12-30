@@ -12,7 +12,7 @@ using UnityEngine;
 
 using static Settings;
 
-public abstract class ICodeFormatter
+public abstract class ICodeFormatter : IDisposable
 {
     public const uint ColorDefault = 0xFFFFFFFF;
     public static uint ColorError = ColorFromHTML("#ff0000");
@@ -503,5 +503,9 @@ public abstract class ICodeFormatter
 
         L.Debug("No encoded source found after tag for extraction.");
         return "";
+    }
+
+    public virtual void Dispose()
+    {
     }
 }

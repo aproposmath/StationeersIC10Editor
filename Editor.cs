@@ -328,6 +328,8 @@ public class Editor
 
     public TextPosition GetTextPositionFromMouse(bool clampToTextArea = true)
     {
+        if(Lines.Count == 0)
+            return new TextPosition(0, 0);
         Vector2 mousePos = ImGui.GetMousePos();
 
         int line =

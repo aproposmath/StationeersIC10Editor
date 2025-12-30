@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 
 using StationeersIC10Editor;
 
@@ -19,7 +22,7 @@ public class LSPFormatter : ICodeFormatter
         set { Identifier.version = value; }
     }
 
-    LSPFormatter() : base()
+    public LSPFormatter() : base()
     {
     }
 
@@ -62,6 +65,11 @@ public class LSPFormatter : ICodeFormatter
         }
     }
 
+    public static double MatchingScore(string input)
+    {
+        return 1.0;
+    }
+
     public virtual void SubmitChanges()
     {
         L.Debug("Code changed, submitting changes to LSP");
@@ -71,13 +79,14 @@ public class LSPFormatter : ICodeFormatter
             if (!_isOpen)
             {
                 L.Debug("Opening document in LSP");
-                LspClient.OpenDocument(Identifier.uri, "python", Editor.Code);
+                LspClient.OpenDocument(Identifier.uri, "ic10", Editor.Code);
                 _isOpen = true;
             }
             else
             {
                 L.Debug("Sending changes to LSP");
-                LspClient.ChangeDocument(Identifier, _changes.ToArray());
+                // LspClient.ChangeDocument(Identifier, _changes.ToArray());
+                LspClient.ChangeDocumentFull(Identifier, Editor.Code);
             }
 
             L.Debug("Changes submitted, request tokens");
@@ -183,7 +192,7 @@ public class LSPFormatter : ICodeFormatter
     public async void UpdateTokens()
     {
         var tokens = await LspClient.RequestSemanticTokens(Identifier.uri);
-        L.Debug($"Received {tokens.Count} semantic tokens from LSP");
+        // L.Debug($"Received {tokens.Count} semantic tokens from LSP");
 
         for (var i = 0; i < tokens.Count; i++)
         {
@@ -286,4 +295,145 @@ public class LSPFormatter : ICodeFormatter
     // L.Debug("Disposing LSP Formatter and closing document");
     // LspClient.CloseDocument(Identifier.uri);
     // }
+}
+
+
+public class IC10LSPFormatter : LSPFormatter
+{
+    public StationeersIC10Editor.IC10.IC10CodeFormatter StaticFormatter;
+    public IC10LSPFormatter() : base()
+    {
+        Identifier = new VersionedTextDocumentIdentifier { uri = null, version = 1 };
+        var lspexe = Path.Combine(BepInEx.Paths.CachePath, "ic10lsp.exe");
+        var startinfo = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = lspexe,
+            Arguments = "",
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        StaticFormatter = new StationeersIC10Editor.IC10.IC10CodeFormatter();
+        LspClient = new LspClientStdio(startinfo);
+        LspClient.OnDiagnostics += UpdateDiagnostics;
+        LspClient.OnInitialized += () => { SubmitChanges(); };
+        if (LspClient.IsInitialized)
+            SubmitChanges();
+        OnCodeChanged += () => { SubmitChanges(); };
+    }
+
+    public override void SubmitChanges()
+    {
+        if (Identifier.uri == null)
+        {
+            string filename = Editor.FileName + ".ic10";
+            Identifier.uri = $"memory://{filename}";
+        }
+        base.SubmitChanges();
+        // AsyncDiag().Forget();
+    }
+
+    public async UniTask AsyncDiag()
+    {
+        var diag = await LspClient.RequestDiagnostics(Identifier);
+        L.Debug($"Received {diag} diagnostics from manual request");
+    }
+
+    public override StyledLine ParseLine(string line)
+    {
+        return StaticFormatter.ParseLine(line);
+    }
+
+    private TextPosition _lastHoverTextPos = new TextPosition(-1, -1);
+    private StyledText _lastHoverInfo = null;
+    private TextPosition _reqestedHoverPos = new TextPosition(-1, -1);
+
+    public async UniTaskVoid GetHoverInfo(TextPosition pos)
+    {
+        if (pos.Line < 0 || pos.Col < 0)
+            return;
+
+        if (pos == _lastHoverTextPos || pos == _reqestedHoverPos)
+            return;
+
+        if(!_isOpen)
+            return;
+
+        _reqestedHoverPos = pos;
+
+        await Task.Delay(300);
+
+        if (_reqestedHoverPos != pos)
+            return;
+
+        _tooltip = null;
+
+        var hover = await LspClient.SendRequestAsync("textDocument/hover",
+            new
+            {
+                textDocument = new { uri = Identifier.uri },
+                position = new { line = pos.Line, character = pos.Col }
+            });
+
+        if (hover == null || !hover.HasValues || hover["contents"] == null)
+            return;
+
+        var content = hover["contents"];
+        StyledText tooltip = new StyledText();
+
+        var addText = (string text) =>
+        {
+            if(text.Contains("**Interactive Actions:**"))
+                return;
+            foreach (var line in text.Split('\n'))
+                tooltip.AddWrapped(line, 80, ICodeFormatter.DefaultStyle);
+        };
+        if (content.Type == Newtonsoft.Json.Linq.JTokenType.Array)
+        {
+            foreach (var item in content)
+            {
+                if (item.Type == Newtonsoft.Json.Linq.JTokenType.Object && item["value"] != null)
+                {
+                    addText(item["value"].ToString());
+                }
+                else if (item.Type == Newtonsoft.Json.Linq.JTokenType.String)
+                {
+                    addText(item.ToString());
+                }
+            }
+        }
+        else if (content.Type == Newtonsoft.Json.Linq.JTokenType.Object && content["value"] != null)
+        {
+            addText(content["value"].ToString());
+        }
+        else if (content.Type == Newtonsoft.Json.Linq.JTokenType.String)
+        {
+            addText(content.ToString());
+        }
+
+        if (tooltip.Count == 0)
+            return;
+
+        _tooltip = tooltip;
+    }
+
+    public override void UpdateTooltip(TextPosition mouseTextPos)
+    {
+        if (_lastHoverTextPos != mouseTextPos)
+        {
+            _tooltip = null;
+            GetHoverInfo(mouseTextPos).Forget();
+        }
+    }
+
+    public override void Dispose()
+    {
+        L.Debug("Disposing IC10 LSP Formatter and closing document");
+        LspClient.CloseDocument(Identifier.uri);
+        LspClient.Dispose();
+        base.Dispose();
+    }
 }
