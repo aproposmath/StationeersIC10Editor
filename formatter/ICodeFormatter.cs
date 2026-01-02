@@ -172,7 +172,7 @@ public abstract class ICodeFormatter
     {
         var lines = code.Split('\n');
         Lines.Clear();
-        L.Debug($"Resetting code with {lines.Length} lines");
+        // L.Debug($"Resetting code with {lines.Length} lines");
         foreach (var line in lines)
             AppendLine(line);
         OnCodeChanged();
