@@ -333,10 +333,10 @@ public class Editor
         int line =
             (int)((mousePos.y + LineSpacing - _firstLineY) / LineHeight) + _firstLineIndex;
         int column = (int)(
-            (mousePos.x - _textAreaOrigin.x) / CharWidth - ICodeFormatter.LineNumberOffset
+            (mousePos.x - _textAreaOrigin.x) / CharWidth - ICodeFormatter.LineNumberOffset - 0.5f
         );
 
-        if (!clampToTextArea && (line < 0 || line >= Lines.Count))
+        if (!clampToTextArea && (line < 0 || line >= Lines.Count || column < 0))
         {
             return new TextPosition(-1, -1);
         }
