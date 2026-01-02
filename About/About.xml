@@ -2,7 +2,7 @@
 <ModMetadata xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Name>IC10 Editor</Name>
   <Author>aproposmath</Author>
-  <Version>0.7.5</Version>
+  <Version>0.7.6</Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
 
@@ -32,10 +32,10 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        0.7.5:
+        0.7.6:
 
-        - Only reset code on editor open if necessary (keeps scroll position/caret pos now on reopen)
-        - Don't trigger text selection when clicking/scrolling using the scroll bar
+        - Minor tooltip fixes
+        - Fix jr jump target highlighting
 
   </ChangeLog>
   <WorkshopHandle>3592775931</WorkshopHandle>
