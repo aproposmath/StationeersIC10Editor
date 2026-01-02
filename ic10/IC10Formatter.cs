@@ -256,7 +256,7 @@ public class IC10CodeFormatter : StaticFormatter
         if (!instruction.StartsWith("j") && !instruction.StartsWith("b"))
             return;
 
-        bool isRelative = instruction.StartsWith("br");
+        bool isRelative = instruction.StartsWith("br") || instruction == "jr";
 
         var operand = line[1];
 
