@@ -392,6 +392,7 @@ public abstract class ICodeFormatter
             new Vector2(Tooltip.Width, Tooltip.Height) + 2 * ImGui.GetStyle().WindowPadding
         );
         ImGui.BeginTooltip();
+        ImGui.SetWindowFontScale(Scale);
         Tooltip.Draw(ImGui.GetCursorScreenPos());
         ImGui.EndTooltip();
     }
