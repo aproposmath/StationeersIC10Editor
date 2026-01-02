@@ -303,24 +303,6 @@ public abstract class ICodeFormatter
         {
             _tooltip = token.Error;
         }
-        // if (string.IsNullOrEmpty(token.Tooltip))
-        //     return;
-        //
-        // var tooltip = new StyledText();
-        // // Assuming Data holds error or tooltip info.
-        // // If it's an error token, we color red, else default/white.
-        // uint color = token.IsError ? ColorError : ColorDefault;
-        //
-        // // Simple handling: if Data contains newlines, create multiple lines
-        // foreach (var lineStr in token.Data.Split('\n'))
-        // {
-        //     var l = new Line(lineStr);
-        //     // We add a "fake" token just to color the tooltip text
-        //     l.AddToken(new SemanticToken(0, 0, lineStr.Length, color, 0));
-        //     tooltip.Add(l);
-        // }
-        //
-        // _tooltip = tooltip;
     }
 
     public virtual void UpdateStatus()

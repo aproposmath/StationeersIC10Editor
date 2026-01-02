@@ -905,7 +905,7 @@ public class KeyHandler
             Editor.Selection.End = CaretPos;
             var n0 = Editor.Selection.Start.Line;
             var n1 = Editor.Selection.End.Line;
-            if(n0 < n1)
+            if (n0 < n1)
             {
                 Editor.Selection.Start.Col = 0;
                 Editor.Selection.End.Col = Editor.Lines[n1].Length + 1;

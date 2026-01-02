@@ -50,7 +50,7 @@ public static class IC10EditorPatches
         EditorWindow.UseNativeEditor = false;
         var editor = GetEditor(InputSourceCode.Instance.PCM);
         editor.SetTitle(title);
-        if(editor.MotherboardTab[0].Code != defaultText)
+        if (editor.MotherboardTab[0].Code != defaultText)
             editor.MotherboardTab[0].ResetCode(defaultText);
         editor.ShowWindow();
         defaultText = "__IC10PLACEHOLDER__"; // The editor causes lag for large code, so don't paste it now

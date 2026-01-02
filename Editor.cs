@@ -311,9 +311,9 @@ public class Editor
         }
     }
 
-    private Vector2 _textAreaOrigin,
+    public Vector2 _textAreaOrigin,
         _textAreaSize;
-    private float _scrollY = 0.0f;
+    public float _scrollY = 0.0f;
 
     public bool IsMouseInsideTextArea()
     {
@@ -321,7 +321,7 @@ public class Editor
         float px = _textAreaOrigin.x;
         float py = _textAreaOrigin.y + ImGui.GetStyle().FramePadding.y;
         return mousePos.x >= px
-            && mousePos.x <= px + _textAreaSize.x  - ImGui.GetStyle().ScrollbarSize
+            && mousePos.x <= px + _textAreaSize.x - ImGui.GetStyle().ScrollbarSize
             && mousePos.y >= py
             && mousePos.y <= py + _textAreaSize.y;
     }
@@ -347,7 +347,7 @@ public class Editor
         return new TextPosition(line, column);
     }
 
-    private Vector2 _caretPixelPos;
+    public Vector2 _caretPixelPos;
     private int _firstLineIndex = -1;
     private float _firstLineY = -1.0f;
 
@@ -1200,7 +1200,7 @@ public class Editor
             if (KeyHandler.IsMouseIdle(TooltipDelay / 1000.0f))
             {
                 var pos = GetTextPositionFromMouse(false);
-                if (pos)
+                if (pos.Col >= 0)
                     CodeFormatter.DrawTooltip(ImGui.GetMousePos());
             }
             ImGui.PopFont();
@@ -2171,24 +2171,29 @@ public class EditorWindow
         avgRenderTime = (avgRenderTime * 1000000.0);
         maxRenderTime = (maxRenderTime * 1000000.0);
 
+        var e = ActiveEditor;
+
         ImGui.Text($"Render Time: {avgRenderTime:F0} us avg, {maxRenderTime:F0} us max");
-        // ImGui.Text($"ScrollY: {_scrollY:F2}");
-        // ImGui.Text(
-        //     $"Textpos: {_textAreaOrigin.x:F2}, {_textAreaOrigin.y:F2}, {_textAreaOrigin.y + _scrollY:F2}"
-        // );
-        // ImGui.Text($"Textsize: {_textAreaSize.x:F2}, {_textAreaSize.y:F2}");
-        // ImGui.Text($"Windowpos: {_windowPos.x:F2}, {_windowPos.y:F2}");
-        // ImGui.Text($"CaretPixelPos: {_caretPixelPos.x:F2}, {_caretPixelPos.y:F2}");
-        // ImGui.Text($"MousePos: {ImGui.GetMousePos().x:F2}, {ImGui.GetMousePos().y:F2}");
-        // ImGui.Text(
-        //     $"Mouse relative to text area: {ImGui.GetMousePos().x - _textAreaOrigin.x:F2}, {ImGui.GetMousePos().y - (_textAreaOrigin.y + _scrollY):F2}"
-        // );
-        // ImGui.Text($"Mouse caret pos: {GetTextPositionFromMouse(false)}");
-        // ImGui.Text(
-        //     $"Mouse line: {(ImGui.GetMousePos().y - _textAreaOrigin.y) / LineHeight:F2}"
-        // );
-        // ImGui.Text($"CaretPixelPos: {_caretPixelPos.x:F2}, {_caretPixelPos.y:F2}");
-        // ImGui.Text($"Autocomplete suggestion: {CodeFormatter.GetAutocompleteSuggestion()}");
+        ImGui.Text($"ScrollY: {e._scrollY:F2}");
+        ImGui.Text(
+            $"Textpos: {e._textAreaOrigin.x:F2}, {e._textAreaOrigin.y:F2}, {e._textAreaOrigin.y + e._scrollY:F2}"
+        );
+        ImGui.Text($"Textsize: {e._textAreaSize.x:F2}, {e._textAreaSize.y:F2}");
+        ImGui.Text($"CaretPixelPos: {e._caretPixelPos.x:F2}, {e._caretPixelPos.y:F2}");
+        ImGui.Text($"MousePos: {ImGui.GetMousePos().x:F2}, {ImGui.GetMousePos().y:F2}");
+        ImGui.Text(
+            $"Mouse relative to text area: {ImGui.GetMousePos().x - e._textAreaOrigin.x:F2}, {ImGui.GetMousePos().y - (e._textAreaOrigin.y + e._scrollY):F2}"
+        );
+        ImGui.Text($"LineNumberOffset: {ICodeFormatter.LineNumberOffset}");
+        ImGui.Text($"Mouse caret pos: {e.GetTextPositionFromMouse(false)}");
+        var mousePos = ImGui.GetMousePos();
+        float c1 = (mousePos.x - e._textAreaOrigin.x + ImGui.GetStyle().FramePadding.x) / CharWidth;
+        float c2 = c1 - ICodeFormatter.LineNumberOffset;
+        ImGui.Text($"Mouse caret col: {c1}, {c2}");
+        ImGui.Text(
+            $"Mouse line: {(ImGui.GetMousePos().y - e._textAreaOrigin.y) / LineHeight:F2}"
+        );
+        ImGui.Text($"CaretPixelPos: {e._caretPixelPos.x:F2}, {e._caretPixelPos.y:F2}");
         ImGui.Text($"Font w/h: {CharWidth:F2}, {LineHeight:F2}");
 
         if (_renderStopwatch != null)
