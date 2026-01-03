@@ -17,7 +17,7 @@ using StationeersIC10Editor;
 
 namespace ImGuiEditor.LSP;
 
-public class LspClient
+public class LspClient : IDisposable
 {
     private int _nextId = 0;
 
@@ -29,52 +29,16 @@ public class LspClient
     protected object _sendLock = new object();
     protected Stream _lspInputStream = null;
     protected Stream _lspOutputStream = null;
+    protected Process _process;
 
     public Action<string> OnError = (string msg) => { };
     public Action<string> OnInfo = (string msg) => { };
     public Action<PublishDiagnosticsParams> OnDiagnostics = (PublishDiagnosticsParams msg) => { };
-    public Action OnInitialized = () =>
-    {
-        // send workspace/didChangeWorkspaceFolders notification
-
-        // {
-        // "jsonrpc": "2.0",
-        //   "method": "workspace/didChangeConfiguration",
-        //   "params": {
-        //     "settings": {
-        //       "basedpyright": {
-        //         "analysis": {
-        //           "autoImportCompletions": false
-        //         }
-        //       }
-        //     }
-        //   }
-        // }
-    };
+    public Action OnInitialized = () => { };
 
     public bool IsInitialized => _isInitialized.WaitOne(0);
 
-    public LspClient()
-    {
-
-        OnInitialized += () =>
-        {
-
-            SendNotificationAsync("workspace/didChangeConfiguration", new
-            {
-                settings = new
-                {
-                    basedpyright = new
-                    {
-                        analysis = new
-                        {
-                            autoImportCompletions = false
-                        }
-                    }
-                }
-            }).Forget();
-        };
-    }
+    public LspClient() { }
 
     // this should be called when the streams are ready
     protected void Init(Stream inputStream, Stream outputStream)
@@ -106,28 +70,7 @@ public class LspClient
             processId = (int?)null,
             rootUri = rootUri,
 
-            initializationOptions = new
-            {
-                // venvPath = Path.Combine(BepInEx.Paths.CachePath, "pytrapic", "venv"),
-                // venv = "venv",
-                python = new
-                {
-                    pythonPath = Path.Combine(BepInEx.Paths.CachePath, "pytrapic", "venv", "Scripts", "python.exe"),
-                    // pythonVersion = "3.14",
-                    extraPaths = new string[] {
-                        // Add any extra paths needed for the LSP server here
-                        Path.Combine(BepInEx.Paths.CachePath, "pytrapic", "venv", "Lib", "site-packages")
-
-                    }
-                }
-                // pythonVersion = "3.14",
-                //         extraPaths = new string[] {
-                //             // Add any extra paths needed for the LSP server here
-                // Path.Combine(BepInEx.Paths.CachePath, "pytrapic", "venv", "Lib", "site-packages")
-                //
-                //         }
-
-            },
+            initializationOptions = new { },
 
             capabilities = new
             {
@@ -571,14 +514,36 @@ public class LspClient
         return new List<SemanticToken>();
     }
 
-    public Process _process1;
+    public virtual void Dispose()
+    {
+        try
+        {
+            _cts.Cancel();
 
+            if (_lspInputStream != null)
+            {
+                _lspInputStream.Close();
+                _lspInputStream.Dispose();
+            }
+
+            if (_lspOutputStream != null)
+            {
+                _lspOutputStream.Close();
+                _lspOutputStream.Dispose();
+            }
+
+            if (_process != null && !_process.HasExited)
+            {
+                _process.Kill();
+                _process.Dispose();
+            }
+        }
+        catch { }
+    }
 }
 
-class LspClientStdio : LspClient, IDisposable
+class LspClientStdio : LspClient
 {
-    private Process _process;
-
     public LspClientStdio(ProcessStartInfo startInfo) : base()
     {
         StationeersIC10Editor.L.Debug("Starting LSP server...");
@@ -613,21 +578,6 @@ class LspClientStdio : LspClient, IDisposable
 
         base.Init(_process.StandardInput.BaseStream, _process.StandardOutput.BaseStream);
     }
-
-    public void Dispose()
-    {
-        try
-        {
-            _cts.Cancel();
-
-            if (_process != null && !_process.HasExited)
-            {
-                _process.Kill();
-                _process.Dispose();
-            }
-        }
-        catch { }
-    }
 }
 
 class LspClientSocket : LspClient, IDisposable
@@ -647,10 +597,11 @@ class LspClientSocket : LspClient, IDisposable
         base.Init(_tcpClient.GetStream(), _tcpClient.GetStream());
     }
 
-    public void Dispose()
+    public override void Dispose()
     {
         try
         {
+            base.Dispose();
             _cts.Cancel();
 
             if (_tcpClient != null)
