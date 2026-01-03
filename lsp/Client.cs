@@ -412,8 +412,6 @@ public class LspClient
     public async void OpenDocument(string uri, string languageId, string text)
     {
         L.Debug($"LSP Formatter using file URI: {uri}");
-        Directory.CreateDirectory(Path.GetDirectoryName(uri));
-        File.WriteAllText(uri, text);
 
         var openParams = new DidOpenTextDocumentParams
         {
