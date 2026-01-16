@@ -14,7 +14,7 @@ using static Settings;
 
 public abstract class ICodeFormatter
 {
-    public const uint ColorDefault = 0xFFFFFFFF;
+    public static uint ColorDefault = 0xFFFFFFFF;
     public static uint ColorError = ColorFromHTML("#ff0000");
     public static uint ColorWarning = ColorFromHTML("#ff8f00");
     public static uint ColorComment = ColorFromHTML("#808080");
@@ -115,10 +115,16 @@ public abstract class ICodeFormatter
                 case "orange":
                     return 0xFF2B66FF;
                 case "purple":
-                    return 0xFF800080;
+                    return 0xFFA72C73;
                 case "gray":
                 case "grey":
                     return 0xFF808080;
+                case "khaki":
+                    return 0xFF3F6363;
+                case "brown":
+                    return 0xFF2B3C63;
+                case "pink":
+                    return 0xFF991CE4;
                 default:
                     return ColorDefault;
             }
@@ -258,6 +264,8 @@ public abstract class ICodeFormatter
             );
         }
 
+        line.DrawBackground(pos, lineIndex);
+
         int selectionMin = -1,
             selectionMax = -1;
         // Calculate Selection Rect
@@ -283,7 +291,7 @@ public abstract class ICodeFormatter
         }
 
         // Draw the actual line content using its SemanticTokens
-        line.Draw(pos, lineIndex);
+        line.DrawText(pos, lineIndex);
     }
 
     public virtual string Compile() => RawText;

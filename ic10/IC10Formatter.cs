@@ -60,16 +60,7 @@ public class IC10CodeFormatter : StaticFormatter
     public static uint GetColor(DataType type, string text)
     {
         if (type == DataType.Color)
-        {
-            if (
-                text == "Color.White"
-                || text == "Color.Yellow"
-                || text == "Color.Pink"
-                || text == "Color.Green"
-            )
-                return ColorFromHTML("black");
-            return ColorFromHTML("white");
-        }
+            return text == "Color.White" ? ColorFromHTML("black") : ColorFromHTML("white");
         switch (type)
         {
             case DataType.Number:
@@ -99,11 +90,37 @@ public class IC10CodeFormatter : StaticFormatter
         }
     }
 
+    public static uint Darken(uint color, float factor)
+    {
+        if (color == 0xffffffff)
+            return color;
+
+        uint a = (color >> 24) & 0xFF;
+        uint r = (color >> 16) & 0xFF;
+        uint g = (color >> 8) & 0xFF;
+        uint b = color & 0xFF;
+
+        var mix = (uint c) => {
+            return (uint)(c * factor);
+        };
+
+        r = mix(r);
+        g = mix(g);
+        b = mix(b);
+
+        return (a << 24) | (r << 16) | (g << 8) | b;
+    }
+
     public static uint GetBackgroundColor(DataType type, string text)
     {
         if (type != DataType.Color)
             return 0;
-        return IC10Utils.Colors.TryGetValue(text, out uint color) ? color : 0;
+        return IC10Utils.Colors.TryGetValue(text, out uint color) ? Darken(color, 0.7f) : 0;
+    }
+
+    public static Style GetStyle(DataType type, string text)
+    {
+        return new Style(GetColor(type, text), GetBackgroundColor(type, text));
     }
 
     public static uint ColorInstruction = ColorFromHTML("#ffff00");
@@ -113,7 +130,7 @@ public class IC10CodeFormatter : StaticFormatter
     public static uint ColorBasicEnum = ColorFromHTML("#20b2aa");
     public static uint ColorDefine = ColorNumber;
     public static uint ColorAlias = ColorFromHTML("#4d4dcc");
-    public static uint ColorLabel = ColorFromHTML("#800080");
+    public static uint ColorLabel = ColorFromHTML("#A128C1");
 
     public static int FindNextWhitespace(string text, int startIndex)
     {
@@ -486,7 +503,7 @@ public class IC10CodeFormatter : StaticFormatter
             var type = types.ContainsKey(suggestion) ? types[suggestion] : DataType.Unknown;
             if (type == DataType.Unknown && IC10Utils.Types.ContainsKey(suggestion))
                 type = IC10Utils.Types[suggestion].ToDataType();
-            var tok = new Token(0, suggestion, GetColor(type, suggestion), (uint)type);
+            var tok = new Token(0, suggestion, GetStyle(type, suggestion), (uint)type);
             var l = new StyledLine(suggestion);
             l.Add(tok);
             _autocomplete.Add(l);

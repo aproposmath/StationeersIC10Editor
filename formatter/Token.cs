@@ -165,15 +165,11 @@ public class StyledLine : List<Token>
         return null;
     }
 
-    public void Draw(Vector2 pos, int lineIndex)
+    public void DrawBackground(Vector2 pos, int lineIndex)
     {
         var list = ImGui.GetWindowDrawList();
         if (this.Count == 0)
-        {
-            if (!string.IsNullOrEmpty(_content))
-                list.AddText(pos, ICodeFormatter.ColorDefault, _content);
             return;
-        }
         foreach (var token in this)
         {
             if (token.Background != 0)
@@ -188,7 +184,20 @@ public class StyledLine : List<Token>
                 );
                 list.AddRectFilled(start, end, token.Background);
             }
+        }
+    }
 
+    public void DrawText(Vector2 pos, int lineIndex)
+    {
+        var list = ImGui.GetWindowDrawList();
+        if (this.Count == 0)
+        {
+            if (!string.IsNullOrEmpty(_content))
+                list.AddText(pos, ICodeFormatter.ColorDefault, _content);
+            return;
+        }
+        foreach (var token in this)
+        {
             list.AddText(
                 new Vector2(pos.x + CharWidth * token.Column, pos.y),
                 token.Color,
@@ -196,6 +205,12 @@ public class StyledLine : List<Token>
             );
 
         }
+    }
+
+    public void Draw(Vector2 pos, int lineIndex)
+    {
+        DrawBackground(pos, lineIndex);
+        DrawText(pos, lineIndex);
     }
 }
 

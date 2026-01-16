@@ -1,6 +1,7 @@
 namespace StationeersIC10Editor;
 
 using System;
+using System.Collections.Generic;
 
 using BepInEx;
 using BepInEx.Configuration;
@@ -57,6 +58,28 @@ public class IC10EditorPlugin : BaseUnityPlugin
     public static ConfigEntry<int> LineSpacingOffset;
     public static ConfigEntry<bool> CollapseOnGameWindow;
     public static ConfigEntry<bool> RelativeLineNumbers;
+
+    public static Dictionary<string, ConfigEntry<string>> Colors = new();
+    public static IC10EditorPlugin Instance { get; private set; }
+
+    public static Dictionary<string, string> ColorDefaults = new()
+    {
+        { "Default", "#FFFFFFFF" },
+        { "Error", "#FF0000FF" },
+        { "Warning", "#FF8F00FF" },
+        { "Comment", "#808080FF" },
+        { "LineNumber", "#808080FF" },
+        { "Selection", "#1A44B0FF" },
+        { "Number", "#20B2AAFF" },
+        { "Instruction", "#FFFF00FF" },
+        { "Device", "#00FF00FF" },
+        { "LogicType", "#FF8000FF" },
+        { "Register", "#0080FFFF" },
+        { "BasicEnum", "#20B2AAFF" },
+        { "Define", "#20B2AAFF" },
+        { "Alias", "#4D4DCCFF" },
+        { "Label", "#A128C1FF" },
+    };
 
     private void BindAllConfigs()
     {
@@ -120,7 +143,69 @@ public class IC10EditorPlugin : BaseUnityPlugin
             false,
             "Show relative line numbers"
         );
+
+
+        foreach (var kv in ColorDefaults)
+        {
+            Colors[kv.Key] = Config.Bind(
+                "Colors",
+                kv.Key,
+                kv.Value
+            );
+        }
+
+        LoadColorConfig();
+        Config.ConfigReloaded += (_, e) =>
+        {
+            try
+            {
+                LoadColorConfig();
+            }
+            catch (Exception ex)
+            {
+                L.Error($"Error applying color scheme: {ex}");
+            }
+        };
     }
+
+    public static void LoadColorConfig()
+    {
+        bool hasColorChanged = false;
+        foreach (var kv in ColorDefaults)
+        {
+            if (Colors.TryGetValue(kv.Key, out var colorConfig))
+            {
+                // use reflection to set the static color fields in IC10CodeFormatter
+                var name = "Color" + kv.Key;
+                var fieldType = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public;
+                var colorField = typeof(ICodeFormatter).GetField(name, fieldType);
+                if (colorField == null)
+                    colorField = typeof(IC10.IC10CodeFormatter).GetField(name, fieldType);
+
+                if (colorField == null)
+                {
+                    L.Error($"Could not find color field for {kv.Key}");
+                    continue;
+                }
+                var oldColor = (uint)colorField.GetValue(null);
+                var newValue = ICodeFormatter.ColorFromHTML(colorConfig.Value);
+                if (oldColor != newValue)
+                {
+                    colorField.SetValue(null, newValue);
+                    hasColorChanged = true;
+                    L.Info($"Color for {kv.Key} changed to {colorConfig.Value}");
+                }
+            }
+        }
+        if (hasColorChanged)
+        {
+            foreach (var editor in IC10EditorPatches.AllEditors)
+                foreach (var tab in editor.Tabs)
+                    tab[0].CodeFormatter.ResetCode(tab[0].Code);
+        }
+    }
+
+
 
     private void Awake()
     {
@@ -130,6 +215,7 @@ public class IC10EditorPlugin : BaseUnityPlugin
             this.Logger.LogInfo(
                 $"Awake {PluginName} {VersionInfo.VersionGit}, build time {VersionInfo.BuildTime}"
             );
+            Instance = this;
             BindAllConfigs();
 
             _harmony = new Harmony(PluginGuid);

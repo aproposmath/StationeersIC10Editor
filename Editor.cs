@@ -2084,6 +2084,24 @@ public class EditorWindow
         ImGui.Checkbox("Show debug window", ref _debugWindowVisible);
 
         ImGui.Separator();
+        ImGui.NewLine();
+        ImGui.Text("Colors");
+        ImGui.SameLine();
+        if (ImGui.Button("Reload"))
+        {
+            IC10EditorPlugin.Instance.Config.Reload();
+            IC10EditorPlugin.LoadColorConfig();
+        }
+
+        ImGui.TextWrapped(
+                "Color settings can be changed in two ways\n"
+                + "- BepInEx/config/aproposmath-stationeers-ic10-editor.cfg\n"
+                + "\tedit the file and then click the reload button above\n"
+                + "- in the Stationeers Launchpad config menu on game startup\n"
+                + "\n"
+                );
+
+        ImGui.Separator();
 
         ImGui.TextWrapped(
             "\nKeyboard Shortcuts:\n"
