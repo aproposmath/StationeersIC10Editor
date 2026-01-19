@@ -321,6 +321,74 @@ public class IC10Utils
             }
         }
     }
+
+    public static string Minify(List<StyledLine> lines)
+    {
+        List<IC10Line> minified = new List<IC10Line>();
+        uint iOld = 0;
+        uint iNew = 0;
+
+        Dictionary<uint, uint> lineMap = new Dictionary<uint, uint>();
+        Dictionary<string, string> defines = new Dictionary<string, string>();
+
+        foreach (var sline in lines)
+        {
+            var line = sline as IC10Line;
+            lineMap[iOld] = iNew;
+            if (line.IsLabel)
+            {
+                string labelName = line[0].Text.TrimEnd(':');
+                defines[labelName] = iNew.ToString();
+            }
+            else if (line.IsDefine)
+            {
+                defines[line[1].Text] = line[2].Text;
+            }
+            else if (line.IsAlias)
+            {
+                if(defines.ContainsKey(line[1].Text))
+                    defines[line[1].Text] = null;
+                else
+                    defines[line[1].Text] = line[2].Text;
+                // skip alias in second pass (and only if it's not overwritten in the code)
+                minified.Add(line);
+
+            }
+            else if (line.NumCodeTokens > 0)
+            {
+                minified.Add(line);
+                iNew++;
+            }
+            iOld++;
+        }
+
+        var newCode = new StringBuilder();
+        foreach (var line in minified)
+        {
+            if (line.IsJump)
+            {
+                int argIndex = line.NumCodeTokens - 1;
+                var t = line[argIndex];
+                string labelName = t.Text;
+                if (defines.TryGetValue(labelName, out string value))
+                    t.Text = value;
+            }
+            else if(line.IsAlias && defines.TryGetValue(line[1].Text, out string aliasValue) && aliasValue != null)
+                continue;
+
+            string lineStr = "";
+            foreach (var t in line)
+            {
+                string text = t.Text;
+                if (defines.TryGetValue(t.Text, out string value) && value != null)
+                    text = value;
+                if (!text.TrimStart().StartsWith("#"))
+                    lineStr += text.Trim() + " ";
+            }
+            newCode.AppendLine(lineStr.Trim());
+        }
+        return newCode.ToString().Trim();
+    }
 }
 
 public struct ArgType
@@ -630,6 +698,8 @@ public class IC10Line : StyledLine
     public bool IsDefine =>
         NumCodeTokens == 3 && GetDataType(0) == DataType.Define && GetDataType(2) == DataType.Number;
     public bool IsInstruction => NumCodeTokens > 0 && GetDataType(0) == DataType.Instruction;
+    public bool IsJump => IsInstruction && (this[0].Text.StartsWith("j") || this[0].Text.StartsWith("b"));
+    public bool IsRelativeJump => IsJump && (this[0].Text == "jr" || this[0].Text.StartsWith("br"));
 
     // Counts actual semantic tokens (excluding whitespace/comments if they are treated as tokens,
     // but in SemanticToken model, everything interesting is a token.

@@ -266,16 +266,12 @@ public class IC10CodeFormatter : StaticFormatter
     {
         LineStyles.Clear();
         var line = Lines[Editor.CaretPos.Line] as IC10Line;
-        if (line == null || !line.IsInstruction || line.NumCodeTokens < 2)
+        if (line == null || !line.IsInstruction || line.NumCodeTokens < 2 || !line.IsJump)
             return;
 
-        var instruction = line[0].Text;
-        if (!instruction.StartsWith("j") && !instruction.StartsWith("b"))
-            return;
+        bool isRelative = line.IsRelativeJump;
 
-        bool isRelative = instruction.StartsWith("br") || instruction == "jr";
-
-        var operand = line[1];
+        var operand = line[line.NumCodeTokens - 1];
 
         int targetLine = -1;
         if (int.TryParse(operand.Text, out int lineNum))
@@ -574,6 +570,12 @@ public class IC10CodeFormatter : StaticFormatter
     {
         base.DrawStatus(pos);
         DrawRegisterUsage();
+    }
+
+    public override void DrawButtons()
+    {
+        if (ImGui.Button("Minify", Settings.buttonSize))
+            Editor.ResetCode(IC10.IC10Utils.Minify(Lines));
     }
 
 
