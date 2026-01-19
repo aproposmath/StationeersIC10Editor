@@ -1756,11 +1756,15 @@ public class EditorWindow
 
     public void DrawFooter()
     {
+        ImGui.SetCursorPosX(ImGui.GetStyle().FramePadding.x);
+
         ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 5.0f);
         ImGui.Text($"{CaretLine,3}/{CaretCol,2},");
         ImGui.SameLine();
 
         var pos = ImGui.GetCursorScreenPos();
+        var px0 = ImGui.GetCursorPosX();
+        var psx0 = pos.x;
         var code = Code;
 
         var sLines = $"{Lines.Count,3}";
@@ -1794,13 +1798,18 @@ public class EditorWindow
         drawList.AddText(pos, byteColor, sBytes);
         pos.x += sBytes.Length * CharWidth;
         drawList.AddText(pos, _colorDefault, " bytes");
+        pos.x += 8 * CharWidth;
+
+        ImGui.SetCursorPosX(px0 + pos.x - psx0);
+
+        ActiveTab[0].CodeFormatter.DrawButtons();
 
         ImGui.SameLine();
 
         ImGui.SetCursorPosX(
             ImGui.GetWindowWidth()
                 - 3 * buttonSize.x
-                - ImGui.GetStyle().FramePadding.x * 3
+                - ImGui.GetStyle().FramePadding.x * 4
                 - ImGui.GetStyle().ItemSpacing.x
         );
         if (ImGui.Button("Cancel", buttonSize))

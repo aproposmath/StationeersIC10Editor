@@ -392,6 +392,9 @@ public abstract class ICodeFormatter
             Status.Draw(pos);
     }
 
+    public virtual void DrawButtons()
+    { }
+
     public virtual void DrawTooltip(Vector2 pos)
     {
         if (Tooltip == null || Tooltip.Count == 0)
