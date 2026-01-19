@@ -1004,8 +1004,6 @@ public class Editor
         }
         CodeFormatter.ResetCode(code);
         CaretPos = new TextPosition(0, 0);
-        if (pushUndo)
-            PushUndoState(false);
         _isCodeChanged = true;
     }
 
