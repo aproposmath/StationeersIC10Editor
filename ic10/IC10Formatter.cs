@@ -100,7 +100,8 @@ public class IC10CodeFormatter : StaticFormatter
         uint g = (color >> 8) & 0xFF;
         uint b = color & 0xFF;
 
-        var mix = (uint c) => {
+        var mix = (uint c) =>
+        {
             return (uint)(c * factor);
         };
 
@@ -182,31 +183,27 @@ public class IC10CodeFormatter : StaticFormatter
                 dt = DataType.Label;
             else if (types.TryGetValue(txt, out DataType type))
                 dt = type;
-            else if (double.TryParse(txt, out _))
+            else if (IC10Utils.TryParseNumber(txt, out _))
             {
                 dt = DataType.Number;
-                if (int.TryParse(txt, out int hash))
+                if (!txt.StartsWith("HASH"))
                 {
-                    var thing = Prefab.Find<Thing>(hash);
-                    if (thing != null)
+                    string prefabName = IC10Utils.GetLogicablePrefabName(txt);
+                    if (prefabName != null)
                     {
                         var tooltip = new StyledText();
-                        var ttLine = new StyledLine(thing.PrefabName);
-                        ttLine.Add(new Token(0, thing.PrefabName, ColorFromHTML("#00ff00")));
+                        var ttLine = new StyledLine(prefabName);
+                        ttLine.Add(new Token(0, prefabName, ColorFromHTML("#00ff00")));
                         tooltip.Add(ttLine);
                         t.Tooltip = tooltip;
                     }
                 }
             }
-            else if (txt.StartsWith("$"))
-                dt = DataType.Number;
             else if (
-                IC10Line.IsHashExpression(txt)
-                || IC10Line.IsStringExpression(txt)
-                || IC10Line.IsBinaryExpression(txt)
+                IC10Utils.IsStringExpression(txt)
             )
                 dt = DataType.Number;
-            else if (IC10Line.IsDeviceChannel(txt))
+            else if (IC10Utils.IsDeviceChannel(txt))
                 dt = DataType.Device;
             else
             {
@@ -239,6 +236,15 @@ public class IC10CodeFormatter : StaticFormatter
                         error =
                             $"Invalid argument type {dt.Description}, expected {expected.Description}";
                         dt = DataType.Unknown;
+                    }
+                    else if (line.IsBatchInstruction && argIndex == line.DeviceHashArgumentIndex)
+                    {
+                        string h = line[i].Text;
+                        if (IC10Utils.GetLogicablePrefabName(h) == null)
+                        {
+                            error = $"Invalid device hash {h}";
+                            dt = DataType.Unknown;
+                        }
                     }
 
                     dt = compat.CommonType(dt);

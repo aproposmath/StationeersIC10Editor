@@ -2,7 +2,6 @@ namespace StationeersIC10Editor;
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 using Assets.Scripts;
 using Assets.Scripts.Networking;
@@ -1360,14 +1359,19 @@ public class EditorWindow
         LoadLibraries().Forget();
     }
 
+    Editor _previewEditor = null;
+    ConfirmWindow _confirmDeleteLibWindow = null;
     public void DrawLibrarySearchWindow()
     {
+
         if (!_librarySearchVisible)
             return;
 
         bool open = true;
+        ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 2.0f);
+        ImGui.SetNextWindowSize(new Vector2(1300, 800), ImGuiCond.FirstUseEver);
         if (
-            ImGui.BeginPopupModal("Library Search", ref open, ImGuiWindowFlags.AlwaysAutoResize)
+            ImGui.Begin("Library Search", ref open)
         )
         {
             if (_librarySearchJustOpened)
@@ -1385,43 +1389,62 @@ public class EditorWindow
                 256,
                 ImGuiInputTextFlags.EnterReturnsTrue
             );
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.BeginTooltip();
+                ImGui.Text(
+                    "Load first matching entry with Enter key, or any entry with double-click."
+                );
+                ImGui.EndTooltip();
+            }
+
             if (oldSearchText != _librarySearchText)
                 PerformLibrarySearch(_librarySearchText);
 
             // Search if Enter pressed or text changed
             if (
-                ImGui.IsItemDeactivatedAfterEdit()
-                || ImGui.IsItemFocused() && (ImGui.IsKeyPressed(ImGuiKey.Enter) || ImGui.IsKeyPressed(ImGuiKey.KeypadEnter))
+                (ImGui.IsItemDeactivatedAfterEdit()
+                || ImGui.IsItemFocused()) && (ImGui.IsKeyPressed(ImGuiKey.Enter) || ImGui.IsKeyPressed(ImGuiKey.KeypadEnter))
             )
             {
                 if (_librarySearchResults.Count > 0)
-                {
                     LoadLibraryEntry(_librarySearchResults[0]);
-                    _librarySearchVisible = false;
-                    ImGui.CloseCurrentPopup();
-                }
             }
 
             ImGui.SameLine();
 
-            // if (ImGui.Button("Create new"))
-            // {
-            //     var editor = new Editor(KeyHandler);
-            //     editor.Title = _librarySearchText;
-            //     editor.ResetCode("");
-            //     Tabs.Add(editor);
-            //     _activeTabIndex = Tabs.Count - 1;
-            //     _librarySearchVisible = false;
-            //     ImGui.CloseCurrentPopup();
-            // }
-            //
-            // ImGui.SameLine();
-
-            if (ImGui.Button("Native"))
+            bool libExists = _libraryCodes.ContainsKey(_librarySearchText) || string.IsNullOrWhiteSpace(_librarySearchText);
+            if (libExists)
             {
-                _librarySearchVisible = false;
-                ImGui.CloseCurrentPopup();
-                ShowNativeWindow(HelpMode.Instructions);
+                ImGui.PushStyleColor(ImGuiCol.Button, ICodeFormatter.ColorFromHTML("gray"));
+                ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ICodeFormatter.ColorFromHTML("gray"));
+                ImGui.PushStyleColor(ImGuiCol.ButtonActive, ICodeFormatter.ColorFromHTML("gray"));
+            }
+            if (ImGui.Button("New") && !libExists)
+            {
+                InputSourceCode.Paste(MotherboardTab[0].Code);
+                InputSourceCode.Instance.SaveNewWithName(_librarySearchText, "");
+                LoadLibraries().Forget();
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.BeginTooltip();
+                if (string.IsNullOrWhiteSpace(_librarySearchText))
+                    ImGui.Text("Please enter a valid library name to the search field to create a new entry.");
+                else if (libExists)
+                    ImGui.Text($"Library \"{_librarySearchText}\" already exists.");
+                else
+                    ImGui.Text("Creates a new library entry using the name in the search box and the current code.");
+                ImGui.EndTooltip();
+            }
+
+
+            if (libExists)
+            {
+                ImGui.PopStyleColor();
+                ImGui.PopStyleColor();
+                ImGui.PopStyleColor();
             }
 
             ImGui.Separator();
@@ -1433,7 +1456,8 @@ public class EditorWindow
             }
             else
             {
-                ImGui.BeginChild("LibrarySearchResults", new Vector2(500, 400), true);
+                ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 0);
+                ImGui.BeginChild("LibrarySearchResults", new Vector2(500, 600), true);
                 for (int i = 0; i < _librarySearchResults.Count; i++)
                 {
                     var lib = _librarySearchResults[i];
@@ -1443,12 +1467,16 @@ public class EditorWindow
                         entryLabel = $"{lib.Title} by {lib.Author} (workshop)";
                     else
                         entryLabel = $"{lib.Title} by {lib.Author} (local)";
-                    if (ImGui.Selectable(entryLabel, _librarySelectedIndex == i))
+                    if (ImGui.Selectable(entryLabel, _librarySelectedIndex == i) || _librarySearchResults.Count == 1)
+                    {
                         _librarySelectedIndex = i;
 
-                    if (ImGui.IsItemHovered())
-                    {
-                        DrawLibraryPreview(lib);
+                        if (_previewEditor == null)
+                        {
+                            _previewEditor = new Editor(KeyHandler, lib);
+                            _previewEditor.IsReadOnly = true;
+                        }
+                        _previewEditor.ResetCode(lib?.Instructions ?? "", false);
                     }
 
                     // Double-click to load
@@ -1458,36 +1486,121 @@ public class EditorWindow
                     )
                     {
                         LoadLibraryEntry(lib);
-                        _librarySearchVisible = false;
-                        ImGui.CloseCurrentPopup();
                     }
                 }
                 ImGui.EndChild();
 
-                ImGui.Text(
-                    "Load first found entry with Enter key, or any entry with double-click."
-                );
+                ImGui.SameLine();
+                ImGui.BeginChild("LibrarySearchPreview", new Vector2(700, 600), true);
+
+                if (
+                    _librarySelectedIndex >= 0
+                    && _librarySelectedIndex < _librarySearchResults.Count
+                )
+                {
+                    var lib = _librarySearchResults[_librarySelectedIndex];
+                    ImGui.PushItemWidth(300);
+                    ImGui.Text($"Title:  {lib.Title}");
+                    ImGui.SameLine();
+                    ImGui.SetCursorPosX(420);
+                    if (ImGui.Button("Delete", buttonSize))
+                    {
+                        _confirmDeleteLibWindow = new ConfirmWindow(
+                            $"Are you sure to delete the library '{lib.Title}'?"
+                        );
+                        _confirmDeleteLibWindow.OnConfirm = () =>
+                        {
+                            InputSourceCode.DeleteInstruction(lib.DirectoryPath.Name);
+                            LoadLibraries().Forget();
+                            _librarySelectedIndex = -1;
+                            _previewEditor = null;
+                            _confirmDeleteLibWindow = null;
+                        };
+                    }
+
+                    if (_confirmDeleteLibWindow != null)
+                    {
+                        if (!_confirmDeleteLibWindow.IsOpen)
+                            _confirmDeleteLibWindow = null;
+                        else
+                            _confirmDeleteLibWindow.Draw();
+                    }
+                    if (ImGui.IsItemHovered())
+                    {
+                        ImGui.BeginTooltip();
+                        ImGui.Text("Delete the library");
+                        ImGui.EndTooltip();
+                    }
+                    ImGui.SameLine();
+                    if (ImGui.Button("Copy", buttonSize))
+                        GameManager.Clipboard = lib.Instructions;
+
+                    if (ImGui.IsItemHovered())
+                    {
+                        ImGui.BeginTooltip();
+                        ImGui.Text("Copy code to clipboard");
+                        ImGui.EndTooltip();
+                    }
+                    ImGui.SameLine();
+                    if (ImGui.Button("Load", buttonSize))
+                        LoadLibraryEntry(lib);
+                    if (ImGui.IsItemHovered())
+                    {
+                        ImGui.BeginTooltip();
+                        ImGui.Text("Load this library into the editor");
+                        ImGui.EndTooltip();
+                    }
+                    ImGui.Text($"Author: {lib.Author}");
+                    var date = DateTime.FromFileTimeUtc(lib.DateTime);
+                    ImGui.Text($"Date:   {date.ToLocalTime()}");
+                    ImGui.TextWrapped($"Description:");
+                    ImGui.PopItemWidth();
+                    ImGui.SameLine();
+                    ImGui.SetCursorPosX(605);
+                    if (ImGui.Button("Save", buttonSize))
+                        lib.SaveToFile(lib.DirectoryPath);
+                    if (ImGui.IsItemHovered())
+                    {
+                        ImGui.BeginTooltip();
+                        ImGui.Text("Save desription");
+                        ImGui.EndTooltip();
+                    }
+                    ImGui.InputTextMultiline(
+                        "##LibraryDescriptionEdit",
+                        ref lib.Description,
+                        1024,
+                        new Vector2(675, 60)
+                    );
+                    ImGui.Separator();
+
+                    float heightAvailable = ImGui.GetContentRegionAvail().y - 10;
+
+                    _previewEditor.Update();
+                    ImGui.PushStyleVar(ImGuiStyleVar.ChildBorderSize, 0);
+                    _previewEditor.Draw(
+                        ImGui.GetCursorScreenPos(),
+                        new Vector2(670, heightAvailable),
+                        "##LibraryPreviewEditor"
+                    );
+                    ImGui.PopStyleVar();
+                }
+                ImGui.EndChild();
+
+                ImGui.PopStyleVar();
             }
 
             ImGui.Separator();
             if (ImGui.Button("Close"))
-            {
                 _librarySearchVisible = false;
-                ImGui.CloseCurrentPopup();
-            }
             if (ImGui.IsKeyPressed(ImGuiKey.Escape))
-            {
                 _librarySearchVisible = false;
-                ImGui.CloseCurrentPopup();
-            }
 
-            ImGui.EndPopup();
+            ImGui.End();
         }
+        ImGui.PopStyleVar();
 
         if (!open)
-        {
             _librarySearchVisible = false;
-        }
     }
 
     private void PerformLibrarySearch(string query)
@@ -1512,26 +1625,6 @@ public class EditorWindow
         }
     }
 
-    private void DrawLibraryPreview(InstructionData lib)
-    {
-        if (lib?.Instructions == null)
-            return;
-
-        ImGui.BeginTooltip();
-        ImGui.Text($"Title: {lib.Title}");
-        ImGui.Text($"Author: {lib.Author}");
-        var date = new DateTime(lib.DateTime, DateTimeKind.Utc);
-        ImGui.Text($"Date: {date}");
-        ImGui.TextWrapped($"Description: {lib.Description}");
-        ImGui.Separator();
-
-        var lines = lib.Instructions.Split('\n');
-        int count = Math.Min(15, lines.Length);
-        var preview = string.Join("\n", lines.Take(count));
-        ImGui.TextUnformatted(preview + (lines.Length > count ? "\n..." : ""));
-        ImGui.EndTooltip();
-    }
-
     private void LoadLibraryEntry(InstructionData lib)
     {
         if (lib == null)
@@ -1541,6 +1634,7 @@ public class EditorWindow
         editor.ResetCode(lib.Instructions);
         Tabs.Add(new EditorTab(this, editor, lib.Title));
         _activeTabIndex = Tabs.Count - 1;
+        _librarySearchVisible = false;
     }
 
     public void SwitchToNativeEditor()
@@ -1676,11 +1770,6 @@ public class EditorWindow
 
         if (ImGui.Button("?", smallButtonSize))
             _helpWindowVisible = !_helpWindowVisible;
-
-        ImGui.SameLine();
-
-        if (ImGui.Button("Native", buttonSize))
-            SwitchToNativeEditor();
 
         ImGui.SameLine();
 
@@ -2070,8 +2159,18 @@ public class EditorWindow
         ImGui.SetWindowFontScale(Mathf.Clamp(Scale, 0.5f, 5.0f));
 
         ImGui.TextWrapped(
-            "This is the IC10 Editor. It allows you to edit the source code of IC10 programs with syntax highlighting, undo/redo, and other features.\n\n"
+            "This is the IC10 Editor. It allows you to edit the source code of IC10 programs with syntax highlighting, undo/redo, and other features."
         );
+
+        if (ImGui.Button("Native", buttonSize))
+            SwitchToNativeEditor();
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.BeginTooltip();
+            ImGui.Text("Switch to the native Stationeers IC10 editor.");
+            ImGui.EndTooltip();
+        }
 
         ImGui.Separator();
         ImGui.Text("\nConfiguration:");

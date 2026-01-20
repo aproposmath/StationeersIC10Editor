@@ -177,6 +177,58 @@ public class IC10Utils
         }
     }
 
+    public static string GetLogicablePrefabName(string hashExpression)
+    {
+        if (IsHashExpression(hashExpression))
+        {
+            var dt = GetType(hashExpression);
+            if (!dt.Has(DataType.Number))
+                return null;
+            return hashExpression.Substring(6, hashExpression.Length - 8);
+        }
+
+        if(TryParseNumber(hashExpression, out double hashNum))
+        {
+            int hashValue = (int)hashNum;
+            var thing = Prefab.Find<Thing>(hashValue);
+            if(thing != null && thing is ILogicable)
+                return thing.PrefabName;
+            return null;
+        }
+
+        return null;
+    }
+
+    public static bool TryParseNumber(string text, out double value)
+    {
+        value = double.NaN;
+        if (text.StartsWith("$"))
+        {
+            if (Int64.TryParse(text.Substring(1), System.Globalization.NumberStyles.HexNumber, null, out long hexValue))
+            {
+                value = (double)hexValue;
+                return true;
+            }
+            return false;
+        }
+        if (text.StartsWith("%"))
+        {
+            string digits = text.Substring(1).Replace("_", "");
+            try
+            {
+                value = (double)Convert.ToInt64(digits, 2);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        if (Double.TryParse(text, out value))
+            return true;
+        return false;
+    }
+
     public static HashSet<string> Registers
     {
         get
@@ -389,6 +441,37 @@ public class IC10Utils
         }
         return newCode.ToString().Trim();
     }
+
+    public static bool IsDeviceChannel(string text)
+    {
+        if (!text.Contains(":"))
+            return false;
+        var parts = text.Split(new char[] { ':' }, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2)
+            return false;
+        bool isDevice = IC10Utils.Devices.Contains(parts[0]);
+        if (!isDevice)
+            return false;
+        return Int32.TryParse(parts[1], out int channel) && channel >= 0 && channel <= 7;
+    }
+
+    public static bool IsHashExpression(string text) =>
+        text.StartsWith("HASH(\"") && text.EndsWith("\")");
+
+    public static bool IsStringExpression(string text) =>
+        text.StartsWith("STR(\"") && text.EndsWith("\")");
+
+    public static bool IsBinaryExpression(string text)
+    {
+        if (!text.StartsWith("%"))
+            return false;
+        string digits = text.Substring(1).Replace("_", "");
+        foreach (char c in digits)
+            if (c != '0' && c != '1')
+                return false;
+        return true;
+    }
+
 }
 
 public struct ArgType
@@ -698,8 +781,12 @@ public class IC10Line : StyledLine
     public bool IsDefine =>
         NumCodeTokens == 3 && GetDataType(0) == DataType.Define && GetDataType(2) == DataType.Number;
     public bool IsInstruction => NumCodeTokens > 0 && GetDataType(0) == DataType.Instruction;
-    public bool IsJump => IsInstruction && (this[0].Text.StartsWith("j") || this[0].Text.StartsWith("b"));
-    public bool IsRelativeJump => IsJump && (this[0].Text == "jr" || this[0].Text.StartsWith("br"));
+    public bool IsJump => IsInstruction && (OpCode.StartsWith("j") || OpCode.StartsWith("b"));
+    public bool IsRelativeJump => IsJump && (OpCode == "jr" || OpCode.StartsWith("br"));
+    public bool IsBatchInstruction => IsInstruction && NumCodeTokens > 2 && (OpCode.StartsWith("lb") || OpCode.StartsWith("sb"));
+
+    public string OpCode => IsInstruction ? this[0].Text : String.Empty;
+    public int DeviceHashArgumentIndex => IsBatchInstruction ? (OpCode.StartsWith("lb") ? 1 : 0 ) : -1;
 
     // Counts actual semantic tokens (excluding whitespace/comments if they are treated as tokens,
     // but in SemanticToken model, everything interesting is a token.
@@ -729,36 +816,6 @@ public class IC10Line : StyledLine
             current++;
         }
         return DataType.Unknown;
-    }
-
-    public static bool IsDeviceChannel(string text)
-    {
-        if (!text.Contains(":"))
-            return false;
-        var parts = text.Split(new char[] { ':' }, StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 2)
-            return false;
-        bool isDevice = IC10Utils.Devices.Contains(parts[0]);
-        if (!isDevice)
-            return false;
-        return Int32.TryParse(parts[1], out int channel) && channel >= 0 && channel <= 7;
-    }
-
-    public static bool IsHashExpression(string text) =>
-        text.StartsWith("HASH(\"") && text.EndsWith("\")");
-
-    public static bool IsStringExpression(string text) =>
-        text.StartsWith("STR(\"") && text.EndsWith("\")");
-
-    public static bool IsBinaryExpression(string text)
-    {
-        if (!text.StartsWith("%"))
-            return false;
-        string digits = text.Substring(1).Replace("_", "");
-        foreach (char c in digits)
-            if (c != '0' && c != '1')
-                return false;
-        return true;
     }
 
     // This method logic was moved to IC10CodeFormatter.IdentifyTypesAndAddTokens
