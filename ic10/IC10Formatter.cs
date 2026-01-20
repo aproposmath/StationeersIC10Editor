@@ -200,6 +200,7 @@ public class IC10CodeFormatter : StaticFormatter
                 }
             }
             else if (
+                IC10Utils.IsHashExpression(txt) ||
                 IC10Utils.IsStringExpression(txt)
             )
                 dt = DataType.Number;
