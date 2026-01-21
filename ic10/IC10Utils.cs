@@ -133,6 +133,8 @@ public class IC10Utils
                 _addEnum<HashType>("HashType");
                 _addEnum<LogicDisplay.DisplayMode>("DisplayMode");
                 _addEnum<SettingDisplayMode>("SettingDisplayMode");
+                _addEnum<LogicType>("LogicType");
+                _addEnum<LogicSlotType>("LogicSlotType");
 
                 foreach (var reg in Registers)
                     _addType(reg, DataType.Register);
@@ -561,10 +563,7 @@ public struct ArgType
             {
                 at.Add(
                     DataType.Label,
-                    DataType.Register,
-                    DataType.LogicType,
-                    DataType.LogicSlotType,
-                    DataType.BatchMode
+                    DataType.Register
                 );
                 at.Add(DataType.Color, DataType.BasicEnum);
             }
