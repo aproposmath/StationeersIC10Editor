@@ -1,13 +1,20 @@
 namespace StationeersIC10Editor;
 
+
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 using Assets.Scripts.Objects.Motherboards;
 using Assets.Scripts.UI;
 using Assets.Scripts.UI.ImGuiUi;
+using Assets.Scripts.Objects.Electrical;
 
 using HarmonyLib;
+using Cysharp.Threading.Tasks;
+
+using Assets.Scripts.GridSystem;
+using Assets.Scripts;
+using Assets.Scripts.Objects;
 
 [HarmonyPatch]
 public static class IC10EditorPatches
@@ -115,5 +122,108 @@ public static class IC10EditorPatches
             GetEditor(InputSourceCode.Instance.PCM).MotherboardTab[0].ResetCode(value);
 
         return false;
+    }
+}
+
+[HarmonyPatch]
+[HarmonyPatch(typeof(ProgrammableChipMotherboard))]
+public static class ChipMotherboardPatches
+{
+    static HashSet<ProgrammableChipMotherboard> deserializingDevices = new HashSet<ProgrammableChipMotherboard>();
+
+    static async UniTaskVoid HandleDeviceListChangeAsync(ProgrammableChipMotherboard __instance, ICircuitHolder oldHolder)
+    {
+        await UniTask.SwitchToMainThread();
+        if (GameManager.GameState != GameState.Running)
+            return;
+
+        if(deserializingDevices.Contains(__instance)) {
+            // we are deserializing, skip restoring
+            return;
+        }
+
+        // wait until the original async method is done (it sets _DevicesChanged to false at the end)
+        while (__instance._DevicesChanged)
+            await UniTask.NextFrame();
+
+        if(deserializingDevices.Contains(__instance)) {
+            // we are deserializing, skip restoring
+            return;
+        }
+
+        // find old holder index and re-select it
+        // ignore index 0, since that's the default anyway (and sometimes it would overwrite the deserialized value)
+        for (int i = 1; i < __instance._circuitHolders.Count; i++)
+        {
+            if (__instance._circuitHolders[i] == oldHolder)
+            {
+                L.Debug($"Restoring old circuit holder for motherboard {__instance.name} to index {i}");
+                __instance._dropdown.ItemClicked(i);
+                break;
+            }
+        }
+    }
+
+
+    [HarmonyPatch(nameof(ProgrammableChipMotherboard.HandleDeviceListChange))]
+    [HarmonyPrefix]
+    static bool HandleDeviceListChangePrefix(ProgrammableChipMotherboard __instance)
+    {
+        if(!Settings.RestoreSelectedHousing)
+            return true;
+
+        if(deserializingDevices.Contains(__instance))
+            return false;
+
+        // get the index before it is reset by HandleDeviceListChange
+        // if the index or holder is invalid, there is no need to restore it later
+        var index = __instance._dropdown.SelectedIndex;
+        if (index < 0 || index >= __instance._circuitHolders.Count)
+            return true;
+
+        var oldHolder = __instance._circuitHolders[index];
+        if (oldHolder == null)
+            return true;
+
+        // since HandleDeviceListChange is async, we need to run our code async as well
+        // and wait until the original method is done
+        HandleDeviceListChangeAsync(__instance, oldHolder).Forget();
+        return true;
+    }
+
+    static async UniTaskVoid DeserializeSaveAsync(ProgrammableChipMotherboard __instance)
+    {
+        // "block" HandleDeviceListChange during deserialization
+        // then wait until the game is running and devices have settled
+        // then restore the selected device
+        deserializingDevices.Add(__instance);
+        int index = __instance._dropdown.SelectedIndex;
+
+        await UniTask.SwitchToMainThread();
+
+        while (GameManager.GameState != GameState.Running)
+            await UniTask.NextFrame();
+
+        while (__instance._DevicesChanged)
+            await UniTask.NextFrame();
+
+        await UniTask.NextFrame();
+
+        var dropdown = __instance._dropdown;
+
+        if(index >= 0 && index < __instance._circuitHolders.Count)
+            __instance._dropdown.ItemClicked(index);
+
+        deserializingDevices.Remove(__instance);
+    }
+
+    [HarmonyPatch(nameof(ProgrammableChipMotherboard.DeserializeSave))]
+    [HarmonyPostfix]
+    static void DeserializeSavePostfix(ProgrammableChipMotherboard __instance, ThingSaveData savedData)
+    {
+        // After deserialization, restore the setting when the game is runnings
+        // and all HandleDeviceListChange calls are done
+        if(Settings.RestoreSelectedHousing)
+            DeserializeSaveAsync(__instance).Forget();
     }
 }

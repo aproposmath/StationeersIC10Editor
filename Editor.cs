@@ -146,6 +146,7 @@ public static class Settings
     public static int LineSpacingOffset => IC10EditorPlugin.LineSpacingOffset.Value;
     public static bool CollapseOnGameWindow => IC10EditorPlugin.CollapseOnGameWindow.Value;
     public static bool RelativeLineNumbers => IC10EditorPlugin.RelativeLineNumbers.Value;
+    public static bool RestoreSelectedHousing => IC10EditorPlugin.RestoreSelectedHousing.Value;
 
     public static Vector2 buttonSize => Scale * new Vector2(85, 0);
     public static Vector2 smallButtonSize => Scale * new Vector2(50, 0);

@@ -58,6 +58,7 @@ public class IC10EditorPlugin : BaseUnityPlugin
     public static ConfigEntry<int> LineSpacingOffset;
     public static ConfigEntry<bool> CollapseOnGameWindow;
     public static ConfigEntry<bool> RelativeLineNumbers;
+    public static ConfigEntry<bool> RestoreSelectedHousing;
 
     public static Dictionary<string, ConfigEntry<string>> Colors = new();
     public static IC10EditorPlugin Instance { get; private set; }
@@ -142,6 +143,12 @@ public class IC10EditorPlugin : BaseUnityPlugin
             "RelativeLineNumbers",
             false,
             "Show relative line numbers"
+        );
+        RestoreSelectedHousing = Config.Bind(
+            "General",
+            "RestoreSelectedHousing",
+            true,
+            "Patch the game code to restore the last selected housing on the computer on load/network changes"
         );
 
 
