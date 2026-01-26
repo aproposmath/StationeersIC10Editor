@@ -2,7 +2,7 @@
 <ModMetadata xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Name>IC10 Editor</Name>
   <Author>aproposmath</Author>
-  <Version>0.8.1</Version>
+  <Version>0.8.2</Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
 
@@ -32,11 +32,9 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        0.8.1:
+        0.8.2:
 
-        - Fix parsed data type for LogicType and LogicSlotType literals
-          LogicType.Setting -> treat as number (double)
-          Setting -> treat as LogicType (not valid when a number is expected)
+        - Game patches to restore selected housing on the computer on game load or after network changes
 
   </ChangeLog>
   <WorkshopHandle>3592775931</WorkshopHandle>
