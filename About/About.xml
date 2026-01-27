@@ -2,7 +2,7 @@
 <ModMetadata xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Name>IC10 Editor</Name>
   <Author>aproposmath</Author>
-  <Version>0.8.2</Version>
+  <Version>0.8.3</Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
 
@@ -32,9 +32,9 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        0.8.2:
+        0.8.3:
 
-        - Game patches to restore selected housing on the computer on game load or after network changes
+        - Fix exceptions when multiple libraries have the same title (local/workshop)
 
   </ChangeLog>
   <WorkshopHandle>3592775931</WorkshopHandle>
