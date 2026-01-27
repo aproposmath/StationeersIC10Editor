@@ -1315,10 +1315,10 @@ public class EditorWindow
 
     private bool Show = false;
 
-    private Dictionary<string, InstructionData> _libraryCodes =
-        new Dictionary<string, InstructionData>();
+    private List<InstructionData> _libraryCodes = new List<InstructionData>();
 
-    Dictionary<string, InstructionData> LibraryCodes => _libraryCodes;
+    List<InstructionData> LibraryCodes => _libraryCodes;
+    HashSet<string> _libraryTitles;
     private List<InstructionData> _librarySearchResults = new List<InstructionData>();
 
     private bool _librarySearchVisible = false;
@@ -1334,17 +1334,20 @@ public class EditorWindow
             SteamTransport.WorkshopType.ICCode
         );
 
-        var libs = new Dictionary<string, InstructionData>();
+        var libs = new List<InstructionData>();
+        var titles = new HashSet<string>();
 
         foreach (var item in items)
         {
             InstructionData data = InstructionData.GetFromFile(item.FilePathFullName);
             data.ItemWrapper = item;
-            libs.Add(data.Title, data);
+            libs.Add(data);
+            titles.Add(data.Title);
         }
 
         await UniTask.SwitchToMainThread();
         _libraryCodes = libs;
+        _libraryTitles = titles;
 
         if (_librarySearchVisible)
             PerformLibrarySearch(_librarySearchText);
@@ -1415,7 +1418,8 @@ public class EditorWindow
 
             ImGui.SameLine();
 
-            bool libExists = _libraryCodes.ContainsKey(_librarySearchText) || string.IsNullOrWhiteSpace(_librarySearchText);
+            bool libExists = _libraryTitles.Contains(_librarySearchText) || string.IsNullOrWhiteSpace(_librarySearchText);
+
             if (libExists)
             {
                 ImGui.PushStyleColor(ImGuiCol.Button, ICodeFormatter.ColorFromHTML("gray"));
@@ -1613,15 +1617,15 @@ public class EditorWindow
 
         string q = query.Trim().ToLowerInvariant();
 
-        foreach (var kvp in _libraryCodes)
+        foreach (var lib in _libraryCodes)
         {
             if (
                 string.IsNullOrEmpty(q)
-                || kvp.Key.ToLowerInvariant().Contains(q)
-                || kvp.Value.Instructions.ToLowerInvariant().Contains(q)
+                || lib.Title.ToLowerInvariant().Contains(q)
+                || lib.Instructions.ToLowerInvariant().Contains(q)
             )
             {
-                _librarySearchResults.Add(kvp.Value);
+                _librarySearchResults.Add(lib);
             }
         }
     }
