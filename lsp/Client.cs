@@ -143,7 +143,7 @@ public class LspClient : IDisposable
         var bytes = Encoding.UTF8.GetBytes(json);
         var header = string.Format("Content-Length: {0}\r\n\r\n", bytes.Length);
 
-        L.Debug("LSP Sending Message:\n" + header + json);
+        // L.Debug("LSP Sending Message:\n" + header + json);
 
         var msgBuffer = new byte[header.Length + bytes.Length];
         Array.Copy(Encoding.ASCII.GetBytes(header), 0, msgBuffer, 0, header.Length);
@@ -277,7 +277,7 @@ public class LspClient : IDisposable
     {
         if (string.IsNullOrWhiteSpace(json))
             return;
-        L.Debug("LSP Received Message:\n" + json);
+        // L.Debug("LSP Received Message:\n" + json);
         JObject root;
 
         try
@@ -329,10 +329,10 @@ public class LspClient : IDisposable
         {
             // Notification
             var notifMethod = (string)root["method"];
-            L.Debug("LSP Notification Method: " + notifMethod);
+            // L.Debug("LSP Notification Method: " + notifMethod);
             if (notifMethod == "textDocument/publishDiagnostics")
             {
-                L.Debug("LSP Received Diagnostics Notification.");
+                // L.Debug("LSP Received Diagnostics Notification.");
                 var diagParams = root["params"].ToObject<PublishDiagnosticsParams>();
                 OnDiagnostics(diagParams);
                 return;
@@ -385,7 +385,7 @@ public class LspClient : IDisposable
 
     public async void ChangeDocument(VersionedTextDocumentIdentifier identifier, TextDocumentContentChangeEvent[] changes)
     {
-        L.Debug($"LSP Changing document {identifier.uri} to version {identifier.version} with {changes.Length} changes.");
+        // L.Debug($"LSP Changing document {identifier.uri} to version {identifier.version} with {changes.Length} changes.");
         var changeParams = new DidChangeTextDocumentParams
         {
             textDocument = identifier,
@@ -397,7 +397,7 @@ public class LspClient : IDisposable
 
     public async void ChangeDocumentFull(VersionedTextDocumentIdentifier identifier, string newText)
     {
-        L.Debug($"LSP Changing document {identifier.uri} to version {identifier.version} with full text change.");
+        // L.Debug($"LSP Changing document {identifier.uri} to version {identifier.version} with full text change.");
         var changes = new TextDocumentContentChangeEvent[]
         {
             new TextDocumentContentChangeEvent
