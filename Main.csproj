@@ -3,7 +3,7 @@
   <Import Project="Main.props" Condition="Exists('Main.props')" />
   <PropertyGroup>
     <MSBuildVerbosity>normal</MSBuildVerbosity>
-    <TargetFramework>net46</TargetFramework>
+    <TargetFramework>net48</TargetFramework>
     <AssemblyName>IC10Editor</AssemblyName>
     <Description>Alternative IC10 Editor for Stationeers</Description>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

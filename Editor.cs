@@ -2,6 +2,7 @@ namespace StationeersIC10Editor;
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using Assets.Scripts;
 using Assets.Scripts.Networking;
@@ -137,6 +138,7 @@ public static class Utils
 public static class Settings
 {
     public static bool VimEnabled => IC10EditorPlugin.VimBindings.Value;
+    public static bool EnforceLineLengthLimit => IC10EditorPlugin.EnforceLineLengthLimit.Value;
     public static bool EnforceLineLimit => IC10EditorPlugin.EnforceLineLimit.Value;
     public static bool EnforceByteLimit => IC10EditorPlugin.EnforceByteLimit.Value;
     public static bool PauseOnOpen => IC10EditorPlugin.PauseOnOpen.Value;
@@ -190,10 +192,11 @@ public class Editor
     public ProgrammableChipMotherboard PCM => Target as ProgrammableChipMotherboard;
     public InstructionData InstructionData => Target as InstructionData;
     bool IsMotherboard => PCM != null;
+    public bool EnforceLineLengthLimit => Settings.EnforceLineLengthLimit && IsMotherboard;
     public bool EnforceLineLimit => Settings.EnforceLineLimit && IsMotherboard;
     public bool EnforceByteLimit => Settings.EnforceByteLimit && IsMotherboard;
-    public bool LimitExceeded =>
-        (EnforceLineLimit && Lines.Count > 128) || (EnforceByteLimit && Code.Length > 4096);
+
+    public bool LimitExceeded => (EnforceLineLimit && Lines.Count > 128) || (EnforceByteLimit && Code.Length > 4096) || (EnforceLineLengthLimit && Lines.Any(line => line.Text.Length > 90));
 
     public bool HaveSelection => (bool)Selection;
     public KeyHandler KeyHandler;
@@ -1861,38 +1864,31 @@ public class EditorWindow
         var psx0 = pos.x;
         var code = Code;
 
-        var sLines = $"{Lines.Count,3}";
-        var sBytes = $"{code.Length + Lines.Count - 1,4}";
-
-        uint lineColor = _colorDefault;
-        if (EnforceLineLimit)
-        {
-            sLines += "/128";
-            lineColor =
-                Lines.Count < 120
-                    ? _colorGood
-                    : (Lines.Count <= 128 ? _colorWarning : _colorBad);
-        }
-
-        uint byteColor = _colorDefault;
-        if (EnforceByteLimit)
-        {
-            sBytes += "/4096";
-            byteColor =
-                code.Length < 4000
-                    ? _colorGood
-                    : (code.Length <= 4096 ? _colorWarning : _colorBad);
-        }
-
         var drawList = ImGui.GetWindowDrawList();
-        drawList.AddText(pos, lineColor, sLines);
-        pos.x += sLines.Length * CharWidth;
-        drawList.AddText(pos, _colorDefault, " lines,");
-        pos.x += 8 * CharWidth;
-        drawList.AddText(pos, byteColor, sBytes);
-        pos.x += sBytes.Length * CharWidth;
-        drawList.AddText(pos, _colorDefault, " bytes");
-        pos.x += 8 * CharWidth;
+        var drawLimit = (bool enforce, int n, int limit, string unit) =>
+        {
+            uint color = _colorDefault;
+            var sValue = $" {n.ToString().PadLeft(2, ' ')}";
+            if (enforce)
+            {
+                sValue += $"/{limit}";
+                if (n < limit * 0.9f)
+                    color = _colorGood;
+                else if (n <= limit)
+                    color = _colorWarning;
+                else
+                    color = _colorBad;
+            }
+            drawList.AddText(pos, color, sValue);
+            pos.x += sValue.Length * CharWidth;
+            drawList.AddText(pos, _colorDefault, $" {unit}");
+            pos.x += (unit.Length + 1) * CharWidth;
+        };
+
+        drawLimit(EnforceLineLimit, Lines.Count, 128, "lines,");
+        drawLimit(EnforceLineLengthLimit, Lines.Max(line => line.Text.Length), 90, "chars,");
+        drawLimit(EnforceByteLimit, code.Length + Lines.Count - 1, 4096, "bytes");
+        pos.x += 4 * CharWidth;
 
         ImGui.SetCursorPosX(px0 + pos.x - psx0);
 
@@ -2181,6 +2177,7 @@ public class EditorWindow
         ImGui.Text("\nConfiguration:");
         DrawBoolOption("Pause Game on Open", IC10EditorPlugin.PauseOnOpen);
         DrawBoolOption("Collapse when other window is open", IC10EditorPlugin.CollapseOnGameWindow);
+        DrawBoolOption("Enforce 90 Characters per Line Limit", IC10EditorPlugin.EnforceLineLengthLimit);
         DrawBoolOption("Enforce 128 Lines Limit", IC10EditorPlugin.EnforceLineLimit);
         DrawBoolOption("Enforce 4096 Bytes Limit", IC10EditorPlugin.EnforceByteLimit);
         DrawFloatOption("UI Scaling", IC10EditorPlugin.ScaleFactor, 0.25f, 5.0f);

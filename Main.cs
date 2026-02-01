@@ -50,6 +50,7 @@ public class IC10EditorPlugin : BaseUnityPlugin
 
     public static ConfigEntry<bool> PauseOnOpen;
     public static ConfigEntry<bool> VimBindings;
+    public static ConfigEntry<bool> EnforceLineLengthLimit;
     public static ConfigEntry<bool> EnforceLineLimit;
     public static ConfigEntry<bool> EnforceByteLimit;
     public static ConfigEntry<bool> EnableAutoComplete;
@@ -89,6 +90,12 @@ public class IC10EditorPlugin : BaseUnityPlugin
             "Enable VIM bindings (experimental!)",
             false,
             "Enable VIM bindings"
+        );
+        EnforceLineLengthLimit = Config.Bind(
+            "General",
+            "enforce_line_length_limit",
+            true,
+            "Enforce the 90 characters line limit"
         );
         EnforceLineLimit = Config.Bind(
             "General",
