@@ -197,24 +197,29 @@ public static class ChipMotherboardPatches
         // then wait until the game is running and devices have settled
         // then restore the selected device
         deserializingDevices.Add(__instance);
-        int index = __instance._dropdown.SelectedIndex;
+        try
+        {
+            int index = __instance._dropdown.SelectedIndex;
 
-        await UniTask.SwitchToMainThread();
+            await UniTask.SwitchToMainThread();
 
-        while (GameManager.GameState != GameState.Running)
+            while (GameManager.GameState != GameState.Running)
+                await UniTask.NextFrame();
+
+            while (__instance._DevicesChanged)
+                await UniTask.NextFrame();
+
             await UniTask.NextFrame();
 
-        while (__instance._DevicesChanged)
-            await UniTask.NextFrame();
+            var dropdown = __instance._dropdown;
 
-        await UniTask.NextFrame();
-
-        var dropdown = __instance._dropdown;
-
-        if(index >= 0 && index < __instance._circuitHolders.Count)
-            __instance._dropdown.ItemClicked(index);
-
-        deserializingDevices.Remove(__instance);
+            if (index >= 0 && index < __instance._circuitHolders.Count)
+                __instance._dropdown.ItemClicked(index);
+        }
+        finally
+        {
+            deserializingDevices.Remove(__instance);
+        }
     }
 
     [HarmonyPatch(nameof(ProgrammableChipMotherboard.DeserializeSave))]
