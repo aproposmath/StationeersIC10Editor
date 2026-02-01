@@ -1331,6 +1331,18 @@ public class EditorWindow
     private bool _librarySearchJustOpened = false;
     private int _librarySelectedIndex = -1;
 
+    public async UniTask PublishLibrary(InstructionData data)
+    {
+        try
+        {
+            await data.PublishToWorkshop();
+        }
+        finally
+        {
+            await LoadLibraries();
+        }
+    }
+
     public async UniTask LoadLibraries()
     {
         var items = await NetworkManager.GetLocalAndWorkshopItems(
@@ -1510,7 +1522,12 @@ public class EditorWindow
                     ImGui.PushItemWidth(300);
                     ImGui.Text($"Title:  {lib.Title}");
                     ImGui.SameLine();
-                    ImGui.SetCursorPosX(420);
+                    ImGui.SetCursorPosX(330);
+                    if (ImGui.Button("Publish", buttonSize))
+                    {
+                        lib.PublishToWorkshop().Forget();
+                    }
+                    ImGui.SameLine();
                     if (ImGui.Button("Delete", buttonSize))
                     {
                         _confirmDeleteLibWindow = new ConfirmWindow(
