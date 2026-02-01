@@ -316,6 +316,7 @@ public class IC10CodeFormatter : StaticFormatter
             return;
 
         bool needsUpdate = false;
+        bool needsFullUpdate = false;
 
         foreach (var token in _tokensToUpdate)
         {
@@ -350,12 +351,21 @@ public class IC10CodeFormatter : StaticFormatter
             if (count > 1)
                 type = DataType.Unknown;
 
+            if (count > 0)
+                types[token] = type;
+
             needsUpdate |= !types.ContainsKey(token) || types[token] != type;
-            types[token] = type;
+            needsFullUpdate |= count == 0 && IC10Utils.IsBuiltin(token);
         }
 
         // In an efficient implementation, we would re-parse only affected lines here
-        if (needsUpdate)
+        if (needsFullUpdate)
+        {
+            L.Debug("UpdateDataType: performing full update of all lines");
+            foreach (IC10Line line in Lines)
+                IdentifyTypesAndAddTokens(line);
+        }
+        else if (needsUpdate)
             foreach (IC10Line line in Lines)
                 line.UpdateTokenColors(types, _tokensToUpdate);
 
