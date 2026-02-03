@@ -351,11 +351,11 @@ public class IC10CodeFormatter : StaticFormatter
             if (count > 1)
                 type = DataType.Unknown;
 
-            if (count > 0)
-                types[token] = type;
-
             needsUpdate |= !types.ContainsKey(token) || types[token] != type;
             needsFullUpdate |= count == 0 && IC10Utils.IsBuiltin(token);
+
+            if (count > 0)
+                types[token] = type;
         }
 
         // In an efficient implementation, we would re-parse only affected lines here
