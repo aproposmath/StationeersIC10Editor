@@ -17,6 +17,9 @@ try:
     print("git version", git_version)
 except subprocess.CalledProcessError:
     git_version = "v0.0.0-0-g0000000"
+    
+if git_version.startswith("main"):
+    git_version = "v0.0.0-0-g0000000"
 
 version = git_version
 
