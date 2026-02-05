@@ -2206,7 +2206,7 @@ public class EditorWindow
             IC10EditorPlugin.EnableAutoComplete
         );
         DrawBoolOption("Relative line numbers", IC10EditorPlugin.RelativeLineNumbers);
-        DrawBoolOption("Apply patch to keep selected IC10 in computer", IC10EditorPlugin.RestoreSelectedHousing);
+        DrawBoolOption("Apply patch to keep selected IC10 in computer (Experimental)", IC10EditorPlugin.RestoreSelectedHousing);
         ImGui.Checkbox("Show debug window", ref _debugWindowVisible);
 
         ImGui.Separator();

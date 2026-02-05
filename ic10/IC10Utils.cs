@@ -189,11 +189,11 @@ public class IC10Utils
             return hashExpression.Substring(6, hashExpression.Length - 8);
         }
 
-        if(TryParseNumber(hashExpression, out double hashNum))
+        if (TryParseNumber(hashExpression, out double hashNum))
         {
             int hashValue = (int)hashNum;
             var thing = Prefab.Find<Thing>(hashValue);
-            if(thing != null && thing is ILogicable)
+            if (thing != null && thing is ILogicable)
                 return thing.PrefabName;
             return null;
         }
@@ -400,7 +400,7 @@ public class IC10Utils
             }
             else if (line.IsAlias)
             {
-                if(defines.ContainsKey(line[1].Text))
+                if (defines.ContainsKey(line[1].Text))
                     defines[line[1].Text] = null;
                 else
                     defines[line[1].Text] = line[2].Text;
@@ -427,7 +427,7 @@ public class IC10Utils
                 if (defines.TryGetValue(labelName, out string value))
                     t.Text = value;
             }
-            else if(line.IsAlias && defines.TryGetValue(line[1].Text, out string aliasValue) && aliasValue != null)
+            else if (line.IsAlias && defines.TryGetValue(line[1].Text, out string aliasValue) && aliasValue != null)
                 continue;
 
             string lineStr = "";
@@ -785,7 +785,7 @@ public class IC10Line : StyledLine
     public bool IsBatchInstruction => IsInstruction && NumCodeTokens > 2 && (OpCode.StartsWith("lb") || OpCode.StartsWith("sb"));
 
     public string OpCode => IsInstruction ? this[0].Text : String.Empty;
-    public int DeviceHashArgumentIndex => IsBatchInstruction ? (OpCode.StartsWith("lb") ? 1 : 0 ) : -1;
+    public int DeviceHashArgumentIndex => IsBatchInstruction ? (OpCode.StartsWith("lb") ? 1 : 0) : -1;
 
     // Counts actual semantic tokens (excluding whitespace/comments if they are treated as tokens,
     // but in SemanticToken model, everything interesting is a token.

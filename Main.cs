@@ -153,8 +153,8 @@ public class IC10EditorPlugin : BaseUnityPlugin
         );
         RestoreSelectedHousing = Config.Bind(
             "General",
-            "RestoreSelectedHousing",
-            true,
+            "RestoreSelectedHousing_new",
+            false,
             "Patch the game code to restore the last selected housing on the computer on load/network changes"
         );
 
