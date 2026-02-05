@@ -14,6 +14,7 @@ try:
     git_version = (
         subprocess.check_output(["git", "describe", "--tags"]).strip().decode("utf-8")
     )
+    print("git version", git_version)
 except subprocess.CalledProcessError:
     git_version = "v0.0.0-0-g0000000"
 
