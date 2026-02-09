@@ -51,7 +51,7 @@ Here is a list of the available keyboard shortcuts:
 - `i`, `I`, `a`, `A`, `c`, `C`, `d`, `D`, `dd`, `o`, `O`, `x`, `y`, `yy`, `p`, `~`, `<<`, `>>`, `u`, `Ctrl+r`
 
 #### Search:
-- `f`, `t`, `gf`
+- `f`, `t`, `gf`, `#`, `*`, `/`, `?`, `n`, `N`
 
 #### Other:
 - `.`, `;`, `:w`, `:wq`, `:q`
