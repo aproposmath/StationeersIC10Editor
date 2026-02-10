@@ -596,6 +596,9 @@ public class Editor
     public TextPosition FindStringForward(TextPosition startPos, string searchTerm)
     {
         int lineIndex = startPos.Line;
+        if(lineIndex < 0 || lineIndex >= Lines.Count)
+            return new TextPosition(-1, -1);
+
         int colIndex = startPos.Col + 1;
 
         while (lineIndex < Lines.Count)

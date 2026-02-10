@@ -26,6 +26,8 @@ public class VimCommand
     public string Argument = "";
     private uint _count = 0;
     private KeyHandler Handler;
+    public string Input = "";
+    public bool RecordInput = false;
 
     public uint Count
     {
@@ -49,7 +51,7 @@ public class VimCommand
     }
 
     public bool IsEmpty => Command == "" && Movement == '\0' && _count == 0 && Argument == "";
-    public bool IsFind => Movement == 'f' || Movement == 't';
+    public bool IsFind => Command == "" && (Movement == 'f' || Movement == 't');
     public bool IsSearch => Command == "*" || Command == "/" || Command == "?" || Command == "#";
     public bool IsMovement => Command == "" && Movement != '\0' && _movements.Contains(Movement.ToString());
     public bool IsLineCommand => Command.Length == 1 && _lineCommands.Contains(Command);
@@ -318,18 +320,18 @@ public class VimCommand
             case "C":
                 if (Command == "c" && Movement == 'w' && range.End.Col > 0)
                     range.End.Col--;
-                Handler.InsertMode();
+                Handler.InsertMode(true);
                 editor.DeleteRange(range, false);
-                editor.CaretPos = range.Start;
+                editor.CaretPos = range.Sorted().Start;
                 break;
             case "O":
-                Handler.InsertMode();
+                Handler.InsertMode(true);
                 editor.CaretPos = new TextPosition(editor.CaretLine, 0);
                 editor.Insert("\n");
                 editor.CaretPos = new TextPosition(editor.CaretLine - 1, 0);
                 break;
             case "o":
-                Handler.InsertMode();
+                Handler.InsertMode(true);
                 bool move = editor.CaretLine < editor.Lines.Count - 1;
                 editor.CaretPos = editor.Clamp(new TextPosition(editor.CaretLine + 1, 0));
                 editor.Insert("\n");
@@ -342,12 +344,12 @@ public class VimCommand
             case "i":
             case "a":
                 editor.CaretPos = range.End;
-                Handler.InsertMode();
+                Handler.InsertMode(true);
                 break;
             case "I":
             case "A":
                 editor.CaretPos = range.End;
-                Handler.InsertMode();
+                Handler.InsertMode(true);
                 break;
             case "J":
                 if (range.End.Line > range.Start.Line)
@@ -470,6 +472,13 @@ public class VimCommand
             Count = (uint)nLines;
         }
         editor.KeyHandler.UpdateVisualSelection();
+
+        if (editor.KeyHandler.Mode == KeyMode.Insert && Input.Length > 0)
+        {
+            editor.CurrentLine = editor.CurrentLine.Insert(editor.CaretCol, Input);
+            editor.CaretCol += Input.Length;
+            editor.KeyHandler.Mode = KeyMode.VimNormal;
+        }
         return status;
     }
 }
@@ -480,6 +489,7 @@ public class KeyHandler
 
     public EditorWindow Window;
     public Editor Editor => Window.ActiveEditor;
+    public bool DoRecordInput { get; set; }
 
     public KeyMode Mode
     {
@@ -551,13 +561,13 @@ public class KeyHandler
     }
 
 
-    public void InsertMode()
+    public void InsertMode(bool doRecordInput = false)
     {
         if (Mode == KeyMode.Insert)
             return;
         Editor.PushUndoState(false);
         Mode = KeyMode.Insert;
-        CurrentCommand.Reset();
+        DoRecordInput = doRecordInput;
     }
 
     public string CommandStatus = "";
@@ -768,6 +778,7 @@ public class KeyHandler
         {
             OnKeyPressed("Escape - to Normal mode");
             Mode = KeyMode.VimNormal;
+            DoRecordInput = false;
             CurrentCommand.Reset();
             if (CaretCol > 0)
                 CaretCol--;
@@ -851,6 +862,8 @@ public class KeyHandler
 
             CurrentLine = CurrentLine.Insert(CaretCol, input);
             CaretCol += input.Length;
+            if (DoRecordInput)
+                LastCommand.Input += input;
         }
     }
 
@@ -870,7 +883,7 @@ public class KeyHandler
                 LastFindCommand = CurrentCommand.Clone();
             else if (CurrentCommand.IsSearch)
                 LastSearchCommand = CurrentCommand.Clone();
-            else if (!CurrentCommand.IsMovement)
+            else if (!CurrentCommand.IsMovement && CurrentCommand.Command != "u")
             {
                 if (Mode == KeyMode.VimVisual)
                     Mode = KeyMode.VimNormal;
@@ -935,6 +948,7 @@ public class KeyHandler
         if (shiftDown && !ctrlDown && Input.GetKeyDown(KeyCode.V))
         {
             OnKeyPressed("Shift+V - to Visual Line mode");
+            DoRecordInput = false;
             Mode = KeyMode.VimVisual;
             Editor.Selection.Start = new TextPosition(CaretLine, 0);
             Editor.Selection.End = new TextPosition(CaretLine + 1, 0);
@@ -945,6 +959,7 @@ public class KeyHandler
         {
             CurrentCommand.Reset();
             Mode = KeyMode.VimNormal;
+            DoRecordInput = false;
         }
 
         if (Input.GetKeyDown(KeyCode.Backspace))
