@@ -683,7 +683,6 @@ public class KeyHandler
                 Window.PreviousTab();
             else if (!shift && Input.GetKeyDown(KeyCode.Space))
                 Window.NextTab();
-
         }
 
         if (ctrlDown)
@@ -854,15 +853,6 @@ public class KeyHandler
             CaretCol += input.Length;
         }
     }
-
-    private TextRange LineRange(int line, uint count)
-    {
-        int endLine = line + (int)count;
-        if (endLine > Editor.Lines.Count)
-            endLine = Editor.Lines.Count;
-        return Editor.Clamp(new TextRange(new TextPosition(line, 0), new TextPosition(endLine, 0)));
-    }
-
 
     public void CheckCommand()
     {
