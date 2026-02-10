@@ -675,12 +675,6 @@ public class KeyHandler
             if (Input.GetKeyDown(KeyCode.W))
                 Window.CloseTab();
 
-            if (Input.GetKeyDown(KeyCode.Home))
-                CaretPos = new TextPosition(0, 0);
-
-            if (Input.GetKeyDown(KeyCode.End))
-                CaretPos = new TextPosition(Editor.Lines.Count - 1, Editor.Lines[Editor.Lines.Count - 1].Length);
-
             for (int i = 0; i <= 9; i++)
                 if (Input.GetKeyDown(KeyCode.Alpha0 + i))
                     Window.SetTab((i + 9) % 10);
@@ -724,14 +718,6 @@ public class KeyHandler
                 Editor.Redo();
                 OnKeyPressed("Ctrl+Y - Redo");
             }
-        }
-        else
-        {
-            if (ImGui.IsKeyPressed(ImGuiKey.Home))
-                CaretCol = 0;
-
-            if (ImGui.IsKeyPressed(ImGuiKey.End))
-                CaretCol = CurrentLine.Length;
         }
 
         // check for move actions
