@@ -91,7 +91,7 @@ public class VimCommand
     private static readonly string _singleCharCommands = "cdry";
     private static readonly string _twoCharCommands = "dd yy cc gg gf << >> ";
     private static readonly string _lineCommands = "/:?"; // commands that read argument until Enter is pressed
-    private static readonly string _visualCommands = "dd cc yy xJ";
+    private static readonly string _visualCommands = "dcyxJ<> dd cc yy JJ << >>";
 
     private static readonly string _validFirstChars = _immediateSingleCharCommands + _singleCharCommands + "gft:<>";
 
@@ -120,8 +120,10 @@ public class VimCommand
         if (mode == KeyMode.VimVisual || (bool)selection)
         {
             string cmd = ToString();
-            if (Command == cmd && cmd.Length == 1 && "dcy".Contains(cmd))
+            if (Command == cmd && cmd.Length == 1 && _visualCommands.Contains(cmd))
             {
+                if (cmd == "x")
+                    Command = "d";
                 Command = cmd + cmd;
                 return true;
             }
@@ -460,6 +462,12 @@ public class VimCommand
                     }
                 }
                 break;
+        }
+
+        if (mode == KeyMode.VimVisual && Command.Length > 0 && _visualCommands.Contains(Command))
+        {
+            editor.CaretPos = range.Start;
+            Count = (uint)nLines;
         }
         editor.KeyHandler.UpdateVisualSelection();
         return status;
