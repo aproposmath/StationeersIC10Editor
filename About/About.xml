@@ -1,8 +1,8 @@
-<?xml version="1.0" encoding="utf-8"?>
+
 <ModMetadata xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Name>IC10 Editor</Name>
   <Author>aproposmath</Author>
-  <Version>0.8.6</Version>
+  <Version></Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
 

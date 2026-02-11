@@ -43,9 +43,15 @@ class L
 [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
 public class IC10EditorPlugin : BaseUnityPlugin
 {
-    public const string PluginGuid = "aproposmath-stationeers-ic10-editor"; // Change this to your own unique Mod ID
-    public const string PluginName = "IC10Editor";
-    public const string PluginVersion = VersionInfo.Version;
+    public const string PluginGuid = ThisModInfo.AssemblyGuid;
+    public const string PluginName = ThisModInfo.AssemblyName;
+    public const string PluginVersion = ThisModInfo.Version;
+    public const string PluginVersionGit = ThisModInfo.VersionGit;
+    public static readonly string PluginBuildTime = DateTime
+        .Parse(ThisModInfo.BuildTime)
+        .ToLocalTime()
+        .ToString("yyyy-MM-dd HH:mm:ss");
+
     private Harmony _harmony;
 
     public static ConfigEntry<bool> PauseOnOpen;
@@ -227,7 +233,7 @@ public class IC10EditorPlugin : BaseUnityPlugin
         {
             L.SetLogger(this.Logger);
             this.Logger.LogInfo(
-                $"Awake {PluginName} {VersionInfo.VersionGit}, build time {VersionInfo.BuildTime}"
+                $"Awake {PluginName} {PluginVersion}, build time {PluginBuildTime}"
             );
             Instance = this;
             BindAllConfigs();
@@ -243,7 +249,7 @@ public class IC10EditorPlugin : BaseUnityPlugin
         catch (Exception ex)
         {
             this.Logger.LogError(
-                $"Error during {PluginName} {VersionInfo.VersionGit} init: {ex}"
+                $"Error during {PluginName} {PluginVersion} init: {ex}"
             );
         }
     }
@@ -251,7 +257,7 @@ public class IC10EditorPlugin : BaseUnityPlugin
     private void OnDestroy()
     {
 #if DEBUG
-        L.Info($"OnDestroy ${PluginName} {VersionInfo.VersionGit}");
+        L.Info($"OnDestroy ${PluginName} {PluginVersion}");
         IC10EditorPatches.Cleanup();
         _harmony.UnpatchSelf();
 #endif
