@@ -1,9 +1,9 @@
 {
-    "sha256:4b84e95f59af86b82430a8284d876bc92bad3bb8ef8e790f69295a2b4df2a0d7": {
+    "sha256:3a566aa8fd1fb7b64bb1aa51d084e08bb9f9fcae357b3f2997aebbf5fa95611e": {
         "author": "aproposmath",
         "branch": [],
         "depends_on": [],
-        "digest": "sha256:4b84e95f59af86b82430a8284d876bc92bad3bb8ef8e790f69295a2b4df2a0d7",
+        "digest": "sha256:3a566aa8fd1fb7b64bb1aa51d084e08bb9f9fcae357b3f2997aebbf5fa95611e",
         "id": "3592775931",
         "name": "IC10 Editor",
         "tag": [
