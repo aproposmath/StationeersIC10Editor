@@ -11,11 +11,11 @@
   />
   <ModVersion
       ModID="3592775931"
-      Version="0.8.6.9-dev"
+      Version="0.8.6.12-dev"
       Name="IC10 Editor"
       Author="aproposmath"
       Url="https://github.com/aproposmath/StationeersIC10Editor/releases/download/main/IC10Editor-main.zip"
-      Digest="sha256:3ee682f52ce4ba14aef480c8da97a3967480ae4d0d626643a743af195a2bd84c"
+      Digest="sha256:1d1ff9861ca91866208bca02909937ecdc3769899060dfd16edc18edcf05980e"
   />
 </ModRepo
 >
