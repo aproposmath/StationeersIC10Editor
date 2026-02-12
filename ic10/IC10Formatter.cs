@@ -309,7 +309,7 @@ public class IC10CodeFormatter : StaticFormatter
     {
         if (newToken != null)
         {
-            L.Debug($"UpdateDataType: scheduling update for token {newToken}, defer={defer}");
+            // L.Debug($"UpdateDataType: scheduling update for token {newToken}, defer={defer}");
             _tokensToUpdate.Add(newToken);
         }
         if (defer || _tokensToUpdate.Count == 0)
@@ -421,7 +421,7 @@ public class IC10CodeFormatter : StaticFormatter
 
     private void UpdateDict(Dictionary<string, int> dict, string key, DataType type, bool add)
     {
-        L.Debug($"UpdateDict: {(add ? "adding" : "removing")} key {key} of type {type}");
+        // L.Debug($"UpdateDict: {(add ? "adding" : "removing")} key {key} of type {type}");
         if (add)
         {
             if (!dict.ContainsKey(key))
