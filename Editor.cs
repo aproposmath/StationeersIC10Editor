@@ -1927,7 +1927,8 @@ public class EditorWindow
 
         ImGui.SameLine();
 
-        if (LimitExceeded)
+        bool limitExceeded = LimitExceeded;
+        if (limitExceeded)
         {
             ImGui.PushItemFlag(ImGuiItemFlags.Disabled, true);
             ImGui.PushStyleColor(ImGuiCol.Button, ICodeFormatter.ColorFromHTML("gray"));
@@ -1959,10 +1960,10 @@ public class EditorWindow
                 KeyHandler.CommandStatus = ActiveTab[0].Save();
         }
 
-        if (LimitExceeded)
+        if (limitExceeded)
         {
-            ImGui.PopItemFlag();
             ImGui.PopStyleColor();
+            ImGui.PopItemFlag();
         }
 
         KeyHandler.DrawStatus();
