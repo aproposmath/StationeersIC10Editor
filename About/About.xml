@@ -1,7 +1,7 @@
 <ModMetadata>
   <Name>IC10 Editor</Name>
   <Author>aproposmath</Author>
-  <Version></Version>
+  <Version>0.8.7</Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
 
@@ -31,9 +31,12 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        0.8.6:
+        0.8.7:
 
-        - Disable "restore selected chip in computer" patches and flag them as experimental (might be buggy)
+        - Fix possible segfault in ImGui draw call on "Minify" or "To MB"
+        - Fix missing selection in Shift+Home/End 
+        - VIM: Reapply input text (and remain in normal mode) on '.' (example: "cwText" -&gt; "." will insert "Text")
+        - VIM: Some fixes for commands in visual mode (e.g. having 4 lines selected and doing "&gt;" will do "4&gt;&gt;" on subsequent ".")
 
   </ChangeLog>
   <WorkshopHandle>3592775931</WorkshopHandle>
