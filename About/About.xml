@@ -2,7 +2,7 @@
 <ModMetadata xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Name>IC10 Editor</Name>
   <Author>aproposmath</Author>
-  <Version>0.8.4</Version>
+  <Version>0.8.7</Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
 
@@ -32,13 +32,12 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        0.8.4:
+        0.8.7:
 
-        - Fix issue in syntax highlighting when removing an alias to a built-in symbol
-        - Fix potential issue with recovering selected chip in Computer
-        - Config option to disable patches for chip selection recovery
-        - Enforce 90 characters per line limit (option to disable)
-        - Button to publish library script
+        - Fix possible segfault in ImGui draw call on "Minify" or "To MB"
+        - Fix missing selection in Shift+Home/End 
+        - VIM: Reapply input text (and remain in normal mode) on '.' (example: "cwText" -> "." will insert "Text")
+        - VIM: Some fixes for commands in visual mode (e.g. having 4 lines selected and doing ">" will do "4>>" on subsequent ".")
 
   </ChangeLog>
   <WorkshopHandle>3592775931</WorkshopHandle>

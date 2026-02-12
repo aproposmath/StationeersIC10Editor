@@ -613,4 +613,3 @@ public class LspClientSocket : LspClient, IDisposable
         catch { }
     }
 }
-
