@@ -2353,6 +2353,8 @@ public class EditorWindow
         }
 
         ImGui.Separator();
+        ImGui.End();
+        ImGui.PopStyleColor();
     }
 
 }
