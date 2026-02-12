@@ -29,7 +29,7 @@ public class LspClient : IDisposable
     protected object _sendLock = new object();
     protected Stream _lspInputStream = null;
     protected Stream _lspOutputStream = null;
-    protected Process _process;
+    public Process _process;
 
     public Action<string> OnError = (string msg) => { };
     public Action<string> OnInfo = (string msg) => { };
@@ -41,7 +41,7 @@ public class LspClient : IDisposable
     public LspClient() { }
 
     // this should be called when the streams are ready
-    protected void Init(Stream inputStream, Stream outputStream)
+    public void Init(Stream inputStream, Stream outputStream)
     {
         _lspInputStream = inputStream;
         _lspOutputStream = outputStream;
@@ -542,7 +542,7 @@ public class LspClient : IDisposable
     }
 }
 
-class LspClientStdio : LspClient
+public class LspClientStdio : LspClient
 {
     public LspClientStdio(ProcessStartInfo startInfo) : base()
     {
@@ -580,7 +580,7 @@ class LspClientStdio : LspClient
     }
 }
 
-class LspClientSocket : LspClient, IDisposable
+public class LspClientSocket : LspClient, IDisposable
 {
     private System.Net.Sockets.TcpClient _tcpClient;
 

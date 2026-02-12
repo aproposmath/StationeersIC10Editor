@@ -1323,7 +1323,7 @@ public class EditorWindow
 
     private List<InstructionData> _libraryCodes = new List<InstructionData>();
 
-    List<InstructionData> LibraryCodes => _libraryCodes;
+    public List<InstructionData> LibraryCodes => _libraryCodes;
     HashSet<string> _libraryTitles;
     private List<InstructionData> _librarySearchResults = new List<InstructionData>();
 

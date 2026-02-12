@@ -1,7 +1,8 @@
-<ModMetadata>
+<?xml version="1.0" encoding="utf-8"?>
+<ModMetadata xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Name>IC10 Editor</Name>
   <Author>aproposmath</Author>
-  <Version>0.8.7</Version>
+  <Version>0.8.4</Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
 
@@ -31,12 +32,13 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        0.8.7:
+        0.8.4:
 
-        - Fix possible segfault in ImGui draw call on "Minify" or "To MB"
-        - Fix missing selection in Shift+Home/End 
-        - VIM: Reapply input text (and remain in normal mode) on '.' (example: "cwText" -&gt; "." will insert "Text")
-        - VIM: Some fixes for commands in visual mode (e.g. having 4 lines selected and doing "&gt;" will do "4&gt;&gt;" on subsequent ".")
+        - Fix issue in syntax highlighting when removing an alias to a built-in symbol
+        - Fix potential issue with recovering selected chip in Computer
+        - Config option to disable patches for chip selection recovery
+        - Enforce 90 characters per line limit (option to disable)
+        - Button to publish library script
 
   </ChangeLog>
   <WorkshopHandle>3592775931</WorkshopHandle>
@@ -51,8 +53,8 @@
   <Dependencies />
   <LoadBefore />
   <LoadAfter />
-  <InGameDescription>
-&lt;size=30&gt;&lt;color=#ffff00&gt;IC10 Editor&lt;/color&gt;&lt;/size&gt;
+  <InGameDescription><![CDATA[
+<size=30><color=#ffff00>IC10 Editor</color></size>
 Custom IC10 editor with more features (and no lag!)
 
 - Undo/Redo functionality (also works on accidential import)
@@ -71,8 +73,8 @@ Custom IC10 editor with more features (and no lag!)
 - (optional) no line/size limit (use at your own risk, this might change or break with game updates)
 - no size limit for libraries
 
-&lt;b&gt;&lt;color=#ffff00&gt;Installation&lt;/color&gt;&lt;/b&gt;
-This is a &lt;color=#ffa500&gt;StationeersLaunchPad&lt;/color&gt; Plugin Mod. It requires BepInEx to be installed.
+<b><color=#ffff00>Installation</color></b>
+This is a <color=#ffa500>StationeersLaunchPad</color> Plugin Mod. It requires BepInEx to be installed.
 See: https://github.com/StationeersLaunchPad/StationeersLaunchPad
 
 Known issues/pitfalls:
@@ -80,5 +82,5 @@ Known issues/pitfalls:
 - The editor always draw on top of other windows (for instance the "Save New" input prompt when creating a new library script). Move or collapse the editor window to access these prompts.
 
 Source Code: https://github.com/aproposmath/StationeersIC10Editor
-</InGameDescription>
+]]></InGameDescription>
 </ModMetadata>
