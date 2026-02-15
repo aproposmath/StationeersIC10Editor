@@ -546,7 +546,7 @@ public class LspClientStdio : LspClient
 {
     public LspClientStdio(ProcessStartInfo startInfo) : base()
     {
-        StationeersIC10Editor.L.Debug("Starting LSP server...");
+        L.Debug("Starting LSP server...");
         _process = new Process
         {
             StartInfo = startInfo,
@@ -586,7 +586,7 @@ public class LspClientSocket : LspClient, IDisposable
 
     public LspClientSocket(string host, int port) : base()
     {
-        StationeersIC10Editor.L.Debug("Starting LSP server socket connection...");
+        L.Debug("Starting LSP server socket connection...");
         _tcpClient = new System.Net.Sockets.TcpClient();
         StartAsync(host, port).Forget();
     }

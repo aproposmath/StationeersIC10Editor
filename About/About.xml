@@ -2,6 +2,8 @@
 <ModMetadata xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Name>IC10 Editor</Name>
   <Author>aproposmath</Author>
+  <ModID>com.github.aproposmath.StationeersIC10Editor</ModID>
+  <WorkshopHandle>3592775931</WorkshopHandle>
   <Version>0.8.7</Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
@@ -40,7 +42,6 @@
         - VIM: Some fixes for commands in visual mode (e.g. having 4 lines selected and doing ">" will do "4>>" on subsequent ".")
 
   </ChangeLog>
-  <WorkshopHandle>3592775931</WorkshopHandle>
   <Tags>
     <Tag>IC10</Tag>
     <Tag>Editor</Tag>

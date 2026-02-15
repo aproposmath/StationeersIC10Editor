@@ -1,10 +1,8 @@
 <?xml version="1.0"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
-    <!-- MANDATORY: Change this to your mod id. This will be used as Bepinex plugin GUID and as ModID in About.xml -->
-    <ModID>aproposmath-stationeers-ic10-editor</ModID>
     <AssemblyName>IC10Editor</AssemblyName>
-    <Description>Alternative IC10 Editor for Stationeers</Description>
+    <Description>Alternative IC10 Editor for Stationeers based on ImGui</Description>
     <!-- Optional: Set this if it's not found automatically or you want to force a specific Stationeers directory -->
     <StationeersDirectory/>
   </PropertyGroup>

@@ -8,50 +8,9 @@ using BepInEx.Configuration;
 
 using HarmonyLib;
 
-class L
-{
-    private static BepInEx.Logging.ManualLogSource _logger;
-
-    public static void SetLogger(BepInEx.Logging.ManualLogSource logger)
-    {
-        _logger = logger;
-    }
-
-    public static void Debug(string message)
-    {
-#if DEBUG
-        _logger?.LogDebug(message);
-#endif
-    }
-
-    public static void Info(string message)
-    {
-        _logger?.LogInfo(message);
-    }
-
-    public static void Error(string message)
-    {
-        _logger?.LogError(message);
-    }
-
-    public static void Warning(string message)
-    {
-        _logger?.LogWarning(message);
-    }
-}
-
-[BepInPlugin(PluginGuid, PluginName, PluginVersion)]
+[BepInPlugin(ThisModInfo.ModID, ThisModInfo.AssemblyName, ThisModInfo.Version)]
 public class IC10EditorPlugin : BaseUnityPlugin
 {
-    public const string PluginGuid = ThisModInfo.AssemblyGuid;
-    public const string PluginName = ThisModInfo.AssemblyName;
-    public const string PluginVersion = ThisModInfo.Version;
-    public const string PluginVersionGit = ThisModInfo.VersionGit;
-    public static readonly string PluginBuildTime = DateTime
-        .Parse(ThisModInfo.BuildTime)
-        .ToLocalTime()
-        .ToString("yyyy-MM-dd HH:mm:ss");
-
     private Harmony _harmony;
 
     public static ConfigEntry<bool> PauseOnOpen;
@@ -232,13 +191,11 @@ public class IC10EditorPlugin : BaseUnityPlugin
         try
         {
             L.SetLogger(this.Logger);
-            this.Logger.LogInfo(
-                $"Awake {PluginName} {PluginVersion}, build time {PluginBuildTime}"
-            );
+            L.Info( $"Awake {ThisModInfo.Info}");
             Instance = this;
             BindAllConfigs();
 
-            _harmony = new Harmony(PluginGuid);
+            _harmony = new Harmony(ThisModInfo.ModID);
             _harmony.PatchAll();
 
             CodeFormatters.RegisterFormatter("Plain", typeof(PlainTextFormatter));
@@ -248,16 +205,14 @@ public class IC10EditorPlugin : BaseUnityPlugin
         }
         catch (Exception ex)
         {
-            this.Logger.LogError(
-                $"Error during {PluginName} {PluginVersion} init: {ex}"
-            );
+            L.Error($"Error during init of {ThisModInfo.Info}: {ex}");
         }
     }
 
     private void OnDestroy()
     {
 #if DEBUG
-        L.Info($"OnDestroy ${PluginName} {PluginVersion}");
+        L.Info($"OnDestroy of ${ThisModInfo.Info}");
         IC10EditorPatches.Cleanup();
         _harmony.UnpatchSelf();
 #endif
