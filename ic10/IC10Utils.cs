@@ -243,6 +243,13 @@ public class IC10Utils
                     _registers.Add($"rr{i}");
                     _registers.Add($"rrr{i}");
                     _registers.Add($"rrrr{i}");
+                    if (i < 10)
+                    {
+                        _registers.Add($"r0{i}");
+                        _registers.Add($"rr0{i}");
+                        _registers.Add($"rrr0{i}");
+                        _registers.Add($"rrrr0{i}");
+                    }
                 }
                 _registers.Add("sp");
                 _registers.Add("ra");
@@ -265,6 +272,13 @@ public class IC10Utils
                     _devices.Add($"drr{i}");
                     _devices.Add($"drrr{i}");
                     _devices.Add($"drrrr{i}");
+                    if (i < 10)
+                    {
+                        _registers.Add($"dr0{i}");
+                        _registers.Add($"drr0{i}");
+                        _registers.Add($"drrr0{i}");
+                        _registers.Add($"drrrr0{i}");
+                    }
                 }
                 _devices.Add("db");
             }
