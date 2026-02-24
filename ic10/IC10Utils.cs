@@ -581,14 +581,8 @@ public struct ArgType
                 );
                 at.Add(DataType.Color, DataType.BasicEnum);
             }
-            if (Has(DataType.Label))
+            if (Has(DataType.Label | DataType.DeviceId | DataType.BatchMode | DataType.LogicType))
                 at.Add(DataType.Number, DataType.Register);
-            if (Has(DataType.DeviceId))
-                at.Add(DataType.Number, DataType.Register);
-            if (Has(DataType.BatchMode))
-                at.Add(DataType.Number);
-            if (Has(DataType.LogicType))
-                at.Add(DataType.Number);
             return at;
         }
     }
