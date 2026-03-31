@@ -280,9 +280,4 @@ public class LSPFormatter : ICodeFormatter
             Lines.Add(ParseLine(line));
         OnCodeChanged();
     }
-    // public void Dispose()
-    // {
-    // L.Debug("Disposing LSP Formatter and closing document");
-    // LspClient.CloseDocument(Identifier.uri);
-    // }
 }

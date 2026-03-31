@@ -17,9 +17,11 @@ using StationeersIC10Editor;
 
 namespace ImGuiEditor.LSP;
 
-public class LspClient : IDisposable
+public abstract class LspClient : IDisposable
 {
     private int _nextId = 0;
+    protected bool IsValid = false;
+    protected bool DoRestartOnError = true;
 
     private readonly ConcurrentDictionary<int, TaskCompletionSource<JToken>> _pendingRequests =
         new ConcurrentDictionary<int, TaskCompletionSource<JToken>>();
@@ -47,6 +49,8 @@ public class LspClient : IDisposable
         RootUri = rootUri;
     }
 
+    public abstract UniTask RestartServer();
+
     // this should be called when the streams are ready
     public void Init(Stream inputStream, Stream outputStream, Stream errorStream = null)
     {
@@ -67,7 +71,7 @@ public class LspClient : IDisposable
                 OnError("LSP initialization error: " + ex);
             }
         });
-
+        IsValid = true;
     }
 
     private async UniTask<JToken> InitializeAsync()
@@ -133,29 +137,37 @@ public class LspClient : IDisposable
 
     protected async UniTask SendMessageAsync(string json, bool ignoreInitialized = false)
     {
-
-        if (!ignoreInitialized)
+        try
         {
-            await UniTask.SwitchToThreadPool();
-            _isInitialized.WaitOne();
+            if (!ignoreInitialized)
+            {
+                await UniTask.SwitchToThreadPool();
+                _isInitialized.WaitOne();
+            }
+
+            if (_lspInputStream == null)
+                throw new InvalidOperationException("Server not started.");
+
+            var bytes = Encoding.UTF8.GetBytes(json);
+            var header = string.Format("Content-Length: {0}\r\n\r\n", bytes.Length);
+
+            L.Debug("LSP Sending Message:\n" + header + json);
+
+            var msgBuffer = new byte[header.Length + bytes.Length];
+            Array.Copy(Encoding.ASCII.GetBytes(header), 0, msgBuffer, 0, header.Length);
+            Array.Copy(bytes, 0, msgBuffer, header.Length, bytes.Length);
+
+            lock (_sendLock)
+            {
+                _lspInputStream.Write(msgBuffer, 0, msgBuffer.Length);
+                _lspInputStream.Flush();
+            }
         }
-
-        if (_lspInputStream == null)
-            throw new InvalidOperationException("Server not started.");
-
-        var bytes = Encoding.UTF8.GetBytes(json);
-        var header = string.Format("Content-Length: {0}\r\n\r\n", bytes.Length);
-
-        // L.Debug("LSP Sending Message:\n" + header + json);
-
-        var msgBuffer = new byte[header.Length + bytes.Length];
-        Array.Copy(Encoding.ASCII.GetBytes(header), 0, msgBuffer, 0, header.Length);
-        Array.Copy(bytes, 0, msgBuffer, header.Length, bytes.Length);
-
-        lock (_sendLock)
+        catch (Exception ex)
         {
-            _lspInputStream.Write(msgBuffer, 0, msgBuffer.Length);
-            _lspInputStream.Flush();
+            L.Error($"LSP SendMessageAsync failed: {ex.Message}");
+            IsValid = false;
+            RestartServer().Forget();
         }
     }
 
@@ -164,8 +176,8 @@ public class LspClient : IDisposable
         var json = JsonConvert.SerializeObject(new
         {
             jsonrpc = "2.0",
-            method = method,
-            @params = @params
+            method,
+            @params
         });
 
         return SendMessageAsync(json, ignoreInitialized);
@@ -537,6 +549,7 @@ public class LspClient : IDisposable
     {
         try
         {
+            IsValid = false;
             _cts.Cancel();
 
             if (_lspInputStream != null)
@@ -563,72 +576,106 @@ public class LspClient : IDisposable
 
 public class LspClientStdio : LspClient
 {
+    private readonly ProcessStartInfo _startInfo;
+    private double _lastRestartTime = 0;
+    private readonly object _restartLock = new();
+    public const double RestartCooldown = 2.0;
+
     public LspClientStdio(ProcessStartInfo startInfo, object initializationOptions = null, string rootUri = null) : base(initializationOptions, rootUri)
     {
-        L.Debug("Starting LSP server...");
-        _process = new Process
-        {
-            StartInfo = startInfo,
-            EnableRaisingEvents = true
-        };
-
-        L.Debug("Starting LSP server process...");
-        L.Debug($"Executable: {_process.StartInfo.FileName}");
-        L.Debug($"Arguments: {_process.StartInfo.Arguments}");
-
-        if (!_process.Start())
-        {
-            L.Debug("Failed to start LSP server process.");
-            throw new InvalidOperationException("Failed to start LSP server process.");
-        }
-
-
-        // check if it dies within a second
-        _process.WaitForExit(1000);
-
-        if (_process.HasExited)
-        {
-            L.Debug("LSP server process exited immediately after starting.");
-            L.Debug($"Exit code: {_process.ExitCode}");
-            L.Debug($"Error output: {_process.StandardError.ReadToEnd()}");
-            L.Debug($"Output: {_process.StandardOutput.ReadToEnd()}");
-            throw new InvalidOperationException("LSP server process exited immediately after starting.");
-        }
-
-        base.Init(_process.StandardInput.BaseStream, _process.StandardOutput.BaseStream);
-    }
-}
-
-public class LspClientSocket : LspClient, IDisposable
-{
-    private System.Net.Sockets.TcpClient _tcpClient;
-
-    public LspClientSocket(string host, int port) : base()
-    {
-        L.Debug("Starting LSP server socket connection...");
-        _tcpClient = new System.Net.Sockets.TcpClient();
-        StartAsync(host, port).Forget();
+        _startInfo = startInfo;
+        RestartServer().Forget();
     }
 
-    public async UniTask StartAsync(string host, int port)
+    public override async UniTask RestartServer()
     {
-        await _tcpClient.ConnectAsync(host, port);
-        base.Init(_tcpClient.GetStream(), _tcpClient.GetStream());
-    }
+        var time = ImGuiNET.ImGui.GetTime();
+        if (time - _lastRestartTime < RestartCooldown)
+            return;
 
-    public override void Dispose()
-    {
-        try
+        await UniTask.SwitchToThreadPool();
+
+        lock (_restartLock)
         {
-            base.Dispose();
-            _cts.Cancel();
+            if (time - _lastRestartTime < RestartCooldown)
+                return;
 
-            if (_tcpClient != null)
+            _lastRestartTime = time;
+
+            if (_process != null)
             {
-                _tcpClient.Close();
-                _tcpClient.Dispose();
+                _cts.Cancel();
+                if (!_process.HasExited)
+                {
+                    _process.Kill();
+                    _process.WaitForExit();
+                }
             }
+
+            L.Debug("Starting LSP server...");
+            _process = new Process
+            {
+                StartInfo = _startInfo,
+                EnableRaisingEvents = true
+            };
+
+            L.Debug("Starting LSP server process...");
+            L.Debug($"Executable: {_process.StartInfo.FileName}");
+            L.Debug($"Arguments: {_process.StartInfo.Arguments}");
+
+            if (!_process.Start())
+            {
+                L.Debug("Failed to start LSP server process.");
+                throw new InvalidOperationException("Failed to start LSP server process.");
+            }
+
+            // check if it dies within a second
+            _process.WaitForExit(1000);
+
+            if (_process.HasExited)
+            {
+                L.Debug("LSP server process exited immediately after starting.");
+                L.Debug($"Exit code: {_process.ExitCode}");
+                L.Debug($"Error output: {_process.StandardError.ReadToEnd()}");
+                L.Debug($"Output: {_process.StandardOutput.ReadToEnd()}");
+                throw new InvalidOperationException("LSP server process exited immediately after starting.");
+            }
+
+            base.Init(_process.StandardInput.BaseStream, _process.StandardOutput.BaseStream);
         }
-        catch { }
     }
 }
+
+// public class LspClientSocket : LspClient, IDisposable
+// {
+//     private System.Net.Sockets.TcpClient _tcpClient;
+
+//     public LspClientSocket(string host, int port) : base()
+//     {
+//         L.Debug("Starting LSP server socket connection...");
+//         _tcpClient = new System.Net.Sockets.TcpClient();
+//         StartAsync(host, port).Forget();
+//     }
+
+//     public async UniTask StartAsync(string host, int port)
+//     {
+//         await _tcpClient.ConnectAsync(host, port);
+//         base.Init(_tcpClient.GetStream(), _tcpClient.GetStream());
+//     }
+
+//     public override void Dispose()
+//     {
+//         try
+//         {
+//             base.Dispose();
+//             _cts.Cancel();
+
+//             if (_tcpClient != null)
+//             {
+//                 _tcpClient.Close();
+//                 _tcpClient.Dispose();
+//             }
+//         }
+//         catch { }
+//     }
+// }
