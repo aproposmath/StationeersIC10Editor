@@ -41,26 +41,17 @@ public class LSPFormatter : ICodeFormatter
                 continue;
 
             var start = diag.range.start;
-            var end = diag.range.end;
             var line = start.line;
             var column = start.character;
-            var length = end.character - start.character;
-            if (end.line > start.line)
-                length = Lines[line].Text.Length - start.character;
             if (line < Lines.Count)
             {
                 var token = Lines[line].GetTokenAt(column);
-                if (token == null)
-                    token = Lines[line].GetTokenAt(column - 1);
+                token ??= Lines[line].GetTokenAt(column - 1);
 
                 if (token == null)
-                {
                     L.Debug($"ERROR: No token Adding error token at {line},{column}: {diag.message}");
-                }
                 else
-                {
                     token.Error = StyledText.ErrorText(diag.message);
-                }
             }
         }
     }
@@ -217,15 +208,20 @@ public class LSPFormatter : ICodeFormatter
 
     public override void ReplaceLine(int index, string newLine)
     {
+        string oldLine = Lines[index].Text;
+        int commonPrefix = 0;
+        while (commonPrefix < oldLine.Length && commonPrefix < newLine.Length && oldLine[commonPrefix] == newLine[commonPrefix])
+            commonPrefix++;
+
         IncrementVersion();
         _changes.Add(new TextDocumentContentChangeEvent
         {
             range = new Range
             {
-                start = new Position { line = index, character = 0 },
+                start = new Position { line = index, character = commonPrefix },
                 end = new Position { line = index, character = Lines[index].Text.Length }
             },
-            text = newLine
+            text = newLine.Substring(commonPrefix)
         });
         Lines[index] = ParseLine(newLine);
     }

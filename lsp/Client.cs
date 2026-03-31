@@ -29,6 +29,9 @@ public class LspClient : IDisposable
     protected object _sendLock = new object();
     protected Stream _lspInputStream = null;
     protected Stream _lspOutputStream = null;
+    protected Stream _lspErrorStream = null;
+    protected object InitializationOptions = null;
+    protected string RootUri = null;
     public Process _process;
 
     public Action<string> OnError = (string msg) => { };
@@ -38,20 +41,26 @@ public class LspClient : IDisposable
 
     public bool IsInitialized => _isInitialized.WaitOne(0);
 
-    public LspClient() { }
+    public LspClient(object initializationOptions = null, string rootUri = null)
+    {
+        InitializationOptions = initializationOptions;
+        RootUri = rootUri;
+    }
 
     // this should be called when the streams are ready
-    public void Init(Stream inputStream, Stream outputStream)
+    public void Init(Stream inputStream, Stream outputStream, Stream errorStream = null)
     {
         _lspInputStream = inputStream;
         _lspOutputStream = outputStream;
+        _lspErrorStream = errorStream;
 
-        UniTask.RunOnThreadPool(() => ReadLoopAsync());
+        UniTask.RunOnThreadPool(ReadLoopAsync);
+        UniTask.RunOnThreadPool(ReadErrorLoopAsync);
         UniTask.RunOnThreadPool(async () =>
         {
             try
             {
-                await InitializeAsync("memory://");
+                await InitializeAsync();
             }
             catch (Exception ex)
             {
@@ -61,16 +70,14 @@ public class LspClient : IDisposable
 
     }
 
-    private async UniTask<JToken> InitializeAsync(string rootUri)
+    private async UniTask<JToken> InitializeAsync()
     {
-        rootUri = rootUri = Path.Combine(BepInEx.Paths.CachePath, "pytrapic", "ws");
-        rootUri = new Uri(rootUri).AbsoluteUri;
         var initParams = new
         {
             processId = (int?)null,
-            rootUri = rootUri,
+            rootUri = RootUri,
 
-            initializationOptions = new { },
+            initializationOptions = InitializationOptions ?? new { },
 
             capabilities = new
             {
@@ -102,11 +109,7 @@ public class LspClient : IDisposable
                     }
                 }
             },
-
-            workspaceFolders = new[]
-    {
-        new { uri = rootUri, name = "ws" }
-    }
+            workspaceFolders = new[] { new { uri = RootUri, name = "ws" } }
         };
 
 
@@ -120,8 +123,8 @@ public class LspClient : IDisposable
         if (caps != null)
             OnInfo("Server capabilities:\n" + caps.ToString(Formatting.None));
 
-        _isInitialized.Set();
         await UniTask.SwitchToMainThread();
+        _isInitialized.Set();
         OnInitialized();
         L.Debug("LSP Client is initialized.");
 
@@ -195,6 +198,22 @@ public class LspClient : IDisposable
     }
 
     private readonly List<byte> _recvBuffer = new List<byte>();
+
+    private async Task ReadErrorLoopAsync()
+    {
+        var stream = _process.StandardError.BaseStream;
+        var temp = new byte[4096];
+
+        while (!_cts.IsCancellationRequested)
+        {
+            int read = await stream.ReadAsync(temp, 0, temp.Length, _cts.Token);
+            if (read == 0)
+                break;
+
+            var text = Encoding.UTF8.GetString(temp, 0, read);
+            L.Error("[LSP stderr] " + text);
+        }
+    }
 
     private async Task ReadLoopAsync()
     {
@@ -544,7 +563,7 @@ public class LspClient : IDisposable
 
 public class LspClientStdio : LspClient
 {
-    public LspClientStdio(ProcessStartInfo startInfo) : base()
+    public LspClientStdio(ProcessStartInfo startInfo, object initializationOptions = null, string rootUri = null) : base(initializationOptions, rootUri)
     {
         L.Debug("Starting LSP server...");
         _process = new Process
