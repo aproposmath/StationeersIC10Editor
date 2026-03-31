@@ -83,7 +83,7 @@ public class Token
         Type = type;
     }
 
-    public uint Color => Style.Color;
+    public uint Color => Error != null ? ICodeFormatter.ColorError : Style.Color;
     public uint Background => Style.Background;
 }
 

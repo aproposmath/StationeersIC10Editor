@@ -31,6 +31,10 @@ public class LSPFormatter : ICodeFormatter
 
     public void UpdateDiagnostics(PublishDiagnosticsParams p)
     {
+        foreach (var line in Lines)
+            foreach (var token in line)
+                token.Error = null;
+
         foreach (var diag in p.diagnostics)
         {
             if (diag.severity > 1)
@@ -56,7 +60,6 @@ public class LSPFormatter : ICodeFormatter
                 else
                 {
                     token.Error = StyledText.ErrorText(diag.message);
-                    token.Style.Color = ICodeFormatter.ColorError;
                 }
             }
         }
