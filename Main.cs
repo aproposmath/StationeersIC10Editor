@@ -11,6 +11,9 @@ using HarmonyLib;
 [BepInPlugin(ThisModInfo.ModID, ThisModInfo.AssemblyName, ThisModInfo.Version)]
 public class IC10EditorPlugin : BaseUnityPlugin
 {
+    public const string PluginGuid = ThisModInfo.ModID;
+    public const string PluginName = ThisModInfo.AssemblyName;
+    public const string PluginVersion = ThisModInfo.Version;
     private Harmony _harmony;
 
     public static ConfigEntry<bool> PauseOnOpen;
