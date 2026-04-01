@@ -58,7 +58,6 @@ Here is a list of the available keyboard shortcuts:
 
 #### Notes:
 - `gf` opens the Stationpedia page of the hash/name at the cursor.
-- The `.` command does not work for commands that switch to insert mode.
 
 
 ## Installation
