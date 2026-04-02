@@ -151,7 +151,7 @@ public abstract class LspClient : IDisposable
             var bytes = Encoding.UTF8.GetBytes(json);
             var header = string.Format("Content-Length: {0}\r\n\r\n", bytes.Length);
 
-            L.Debug("LSP Sending Message:\n" + header + json);
+            // L.Debug("LSP Sending Message:\n" + header + json);
 
             var msgBuffer = new byte[header.Length + bytes.Length];
             Array.Copy(Encoding.ASCII.GetBytes(header), 0, msgBuffer, 0, header.Length);
