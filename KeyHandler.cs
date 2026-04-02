@@ -14,6 +14,7 @@ using static Settings;
 
 public enum KeyMode
 {
+    None,
     Insert,
     VimNormal,
     VimVisual
@@ -670,14 +671,14 @@ public class KeyHandler
             return;
         }
         var io = ImGui.GetIO();
-        bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+        var shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
         if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl))
         {
             // these combos are not captured by ImGui for some reason, so handle them via Unity Input
             if (Input.GetKeyDown(KeyCode.S))
-                CommandStatus = Editor.Save();
+                CommandStatus = Editor.Save(shift);
             if (Input.GetKeyDown(KeyCode.E))
-                Window.Export();
+                Window.Export(shift);
             if (Input.GetKeyDown(KeyCode.Q))
                 _isClosing = true;
             if (Input.GetKeyDown(KeyCode.L))

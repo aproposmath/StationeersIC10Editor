@@ -2,6 +2,7 @@ namespace StationeersIC10Editor;
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 
 using Assets.Scripts;
@@ -25,14 +26,18 @@ public class ConfirmWindow
 {
     public string Message;
     public bool IsOpen = true;
+    public string InputPrompt = null;
+    public string UserInput = "";
 
     public Action OnConfirm = delegate { };
 
-    public ConfirmWindow(string message)
+    public ConfirmWindow(string message, string inputPrompt = null)
     {
         ImGui.OpenPopup("Confirm");
         Message = message;
         IsOpen = true;
+        InputPrompt = inputPrompt;
+        UserInput = "";
     }
 
     public void Close()
@@ -50,7 +55,7 @@ public class ConfirmWindow
 
     public void Draw()
     {
-        bool open = true;
+        var open = true;
         if (
             ImGui.BeginPopupModal(
                 "Confirm",
@@ -62,7 +67,12 @@ public class ConfirmWindow
             ImGui.PushStyleColor(ImGuiCol.Text, ICodeFormatter.ColorWarning);
             ImGui.Text(Message);
             ImGui.PopStyleColor();
-            ImGui.Text("");
+            if (string.IsNullOrEmpty(InputPrompt) == false)
+            {
+                ImGui.Text(InputPrompt);
+                ImGui.SameLine();
+                ImGui.InputText("##user_input", ref UserInput, 256, ImGuiInputTextFlags.EnterReturnsTrue);
+            }
             ImGui.Text("Press Escape to cancel, Enter to confirm.");
             ImGui.Separator();
 
@@ -149,6 +159,7 @@ public static class Settings
     public static bool CollapseOnGameWindow => IC10EditorPlugin.CollapseOnGameWindow.Value;
     public static bool RelativeLineNumbers => IC10EditorPlugin.RelativeLineNumbers.Value;
     public static bool RestoreSelectedHousing => IC10EditorPlugin.RestoreSelectedHousing.Value;
+    public static bool EnableVersionControl => IC10EditorPlugin.EnableVersionControl.Value && FossilVCS.IsFossilExeValid;
 
     public static Vector2 buttonSize => Scale * new Vector2(85, 0);
     public static Vector2 smallButtonSize => Scale * new Vector2(50, 0);
@@ -209,7 +220,7 @@ public class Editor
     protected bool _isCodeChanged = false;
 
     public double TimeLastAction => _timeLastAction;
-    public KeyMode KeyMode => KeyHandler.Mode;
+    public KeyMode KeyMode => KeyHandler?.Mode ?? KeyMode.None;
 
     public LinkedList<EditorState> UndoList;
     public LinkedList<EditorState> RedoList;
@@ -1013,8 +1024,12 @@ public class Editor
         _isCodeChanged = true;
     }
 
-    public string Save()
+    public string Save(bool doCommit = false)
     {
+        L.Debug($"Save: doCommit={doCommit}");
+        doCommit = doCommit && EnableVersionControl;
+        L.Debug($"      doCommit={doCommit}");
+        
         if (PCM)
         {
             if (LimitExceeded)
@@ -1027,14 +1042,28 @@ public class Editor
         }
         if (InstructionData != null)
         {
-            _confirmWindow = new ConfirmWindow(
-                $"Are you sure to overwrite the code in Library '{InstructionData.Title}'?"
-            );
+            var title = $"Are you sure to overwrite the code in Library '{InstructionData.Title}'?";
+            if (doCommit)
+                title = $"Save and Commit '{InstructionData.Title}'";
+            _confirmWindow = new ConfirmWindow(title, doCommit ? "Commit Message" : null);
             _confirmWindow.OnConfirm = () =>
             {
                 InstructionData.Instructions = Code;
                 InstructionData.SaveToFile(InstructionData.DirectoryPath);
-                KeyHandler.CommandStatus = $"Library '{InstructionData.Title}' saved.";
+                var msg = $"Library '{InstructionData.Title}' saved";
+                if (doCommit)
+                {
+                    try
+                    {
+                        FossilVCS.AddAndCommit(InstructionData.DirectoryPath.Name, _confirmWindow.UserInput);
+                        msg += " and commited";
+                    }
+                    catch (Exception ex)
+                    {
+                        msg += $" but failed to commit: {ex.Message}";
+                    }
+                }
+                KeyHandler.CommandStatus = msg;
             };
             return "";
         }
@@ -1051,13 +1080,11 @@ public class Editor
         CodeFormatter.Update(CaretPos, ImGui.GetMousePos(), GetTextPositionFromMouse(false));
     }
 
-    public bool HasFocus => KeyHandler.Editor == this;
+    public bool HasFocus => KeyHandler?.Editor == this;
 
     public unsafe void Draw(Vector2 pos, Vector2 size, string id)
     {
-        var padding = ImGui.GetStyle().FramePadding;
         _textAreaSize = size;
-        float scrollHeight = size.y;
         ImGui.BeginChild(id, size, true);
         _textAreaOrigin = pos;
         _textAreaSize = size;
@@ -1156,7 +1183,7 @@ public class Editor
     public void DrawCaret(Vector2 pos)
     {
 
-        if (KeyHandler.Editor != this)
+        if (KeyHandler?.Editor != this)
             return;
 
         var drawList = ImGui.GetWindowDrawList();
@@ -1215,15 +1242,19 @@ public class Editor
 public class EditorTab
 {
     public List<Editor> Editors;
-    public string Title;
     public EditorWindow ParentWindow;
+    public InstructionData Library;
+    public FileHistoryWindow VersionWindow;
+    
+    public string Title => Library?.Title ?? "Motherboard";
 
-    public EditorTab(EditorWindow window, Editor editor, string title)
+    public EditorTab(EditorWindow window, Editor editor, InstructionData lib )
     {
+        Library = lib;
         ParentWindow = window;
         editor.ParentTab = this;
         Editors = new List<Editor> { editor };
-        Title = title;
+        VersionWindow = new FileHistoryWindow(lib);
     }
 
     public int AddEditor(Editor editor)
@@ -1269,6 +1300,7 @@ public class EditorTab
         }
         ImGui.PopFont();
         ImGui.SetCursorScreenPos(new Vector2(p0.x, p0.y + avail.y + ImGui.GetStyle().ItemSpacing.y));
+        VersionWindow?.Draw();
     }
 }
 
@@ -1316,7 +1348,7 @@ public class EditorWindow
     public EditorWindow(ProgrammableChipMotherboard pcm)
     {
         KeyHandler = new KeyHandler(this);
-        Tabs.Add(new EditorTab(this, new Editor(KeyHandler, pcm), "Motherboard"));
+        Tabs.Add(new EditorTab(this, new Editor(KeyHandler, pcm), null));
     }
 
     private bool Show = false;
@@ -1660,7 +1692,7 @@ public class EditorWindow
 
         var editor = new Editor(KeyHandler, lib);
         editor.ResetCode(lib.Instructions);
-        Tabs.Add(new EditorTab(this, editor, lib.Title));
+        Tabs.Add(new EditorTab(this, editor, lib));
         _activeTabIndex = Tabs.Count - 1;
         _librarySearchVisible = false;
     }
@@ -1689,9 +1721,17 @@ public class EditorWindow
         HideWindow();
     }
 
-    public void Export()
+    public void Export(bool directlyToChip=false)
     {
-        if (IsMotherboard)
+        if (!IsMotherboard)
+        {
+            // Apply code to motherboard tab
+            MotherboardTab[0].ResetCode(ActiveEditor.Code);
+            if(!directlyToChip)
+                _activeTabIndex = 0;
+        }
+        
+        if(IsMotherboard || directlyToChip)
         {
             if (LimitExceeded)
             {
@@ -1700,12 +1740,6 @@ public class EditorWindow
             }
             Confirm();
             MotherboardTab[0].PCM.Export();
-        }
-        else
-        {
-            // Apply code to motherboard tab
-            MotherboardTab[0].ResetCode(ActiveEditor.Code);
-            _activeTabIndex = 0;
         }
     }
 
@@ -1798,6 +1832,23 @@ public class EditorWindow
 
         if (ImGui.Button("?", smallButtonSize))
             _helpWindowVisible = !_helpWindowVisible;
+
+        ImGui.SameLine();
+        
+        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 2 * ImGui.GetStyle().ItemSpacing.x);
+
+        if (ImGui.Button("VCS", smallButtonSize) && !IsMotherboard)
+        {
+            ActiveTab.VersionWindow.Open();
+            // _vcsWindow = new FileHistoryWindow();
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.BeginTooltip();
+            ImGui.Text("Version Control (only for libraries)");
+            ImGui.EndTooltip();
+        }
 
         ImGui.SameLine();
 
@@ -1977,7 +2028,7 @@ public class EditorWindow
     private bool _didGameWindowOpen = false;
     private bool _didGameWindowClose = false;
 
-    public bool HasFocus => _hasFocus && !_librarySearchVisible;
+    public bool HasFocus => _hasFocus && !_librarySearchVisible && _confirmDeleteLibWindow == null && !(ActiveEditor._confirmWindow?.IsOpen ?? false);
 
     public void CalcDidGameWindowOpen()
     {
@@ -2211,6 +2262,7 @@ public class EditorWindow
         );
         DrawBoolOption("Relative line numbers", IC10EditorPlugin.RelativeLineNumbers);
         DrawBoolOption("Apply patch to keep selected IC10 in computer (Experimental)", IC10EditorPlugin.RestoreSelectedHousing);
+        DrawBoolOption("Enable Version Control", IC10EditorPlugin.EnableVersionControl);
         ImGui.Checkbox("Show debug window", ref _debugWindowVisible);
 
         ImGui.Separator();

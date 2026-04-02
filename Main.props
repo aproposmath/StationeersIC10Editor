@@ -6,4 +6,8 @@
     <!-- Optional: Set this if it's not found automatically or you want to force a specific Stationeers directory -->
     <StationeersDirectory/>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="System.IO.Compression" Version="4.3.0" />
+    <PackageReference Include="System.IO.Compression.ZipFile" Version="4.3.0" />
+  </ItemGroup>
 </Project>

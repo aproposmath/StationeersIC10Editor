@@ -28,6 +28,8 @@ public class IC10EditorPlugin : BaseUnityPlugin
     public static ConfigEntry<bool> CollapseOnGameWindow;
     public static ConfigEntry<bool> RelativeLineNumbers;
     public static ConfigEntry<bool> RestoreSelectedHousing;
+    
+    public static ConfigEntry<bool> EnableVersionControl;
 
     public static Dictionary<string, ConfigEntry<string>> Colors = new();
     public static IC10EditorPlugin Instance { get; private set; }
@@ -126,6 +128,12 @@ public class IC10EditorPlugin : BaseUnityPlugin
             "Patch the game code to restore the last selected housing on the computer on load/network changes"
         );
 
+        EnableVersionControl = Config.Bind(
+            "General",
+            "EnableVersionControl",
+            false,
+            "Enable version control (Fossil)"
+        );
 
         foreach (var kv in ColorDefaults)
         {
@@ -203,7 +211,8 @@ public class IC10EditorPlugin : BaseUnityPlugin
 
             CodeFormatters.RegisterFormatter("Plain", typeof(PlainTextFormatter));
             CodeFormatters.RegisterFormatter("IC10", typeof(IC10.IC10CodeFormatter), true);
-            // CodeFormatters.RegisterFormatter("C#", typeof(CSharpFormatter));
+
+            FossilVCS.Init();
             // CodeFormatters.RegisterFormatter("Python", typeof(ImGuiEditor.LSP.LSPFormatter));
         }
         catch (Exception ex)
