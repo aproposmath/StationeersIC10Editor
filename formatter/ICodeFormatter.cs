@@ -153,6 +153,21 @@ public abstract class ICodeFormatter
         return ColorDefault;
     }
 
+    public static uint ColorFromVector4(Vector4 color)
+    {
+        var r = (uint)(color.x * 255);
+        var g = (uint)(color.y * 255);
+        var b = (uint)(color.z * 255);
+        var a = (uint)(color.w * 255);
+        return (a << 24) | (b << 16) | (g << 8) | r;
+    }
+
+    public static uint ColorFromVector4(float r, float g, float b, float a = 1.0f)
+    {
+        return (uint)(a * 255) << 24 | (uint)(b * 255) << 16 | (uint)(g * 255) << 8 | (uint)(r * 255);
+    }
+
+
     public virtual void ReplaceLine(int index, string newLine)
     {
         RemoveLine(index);

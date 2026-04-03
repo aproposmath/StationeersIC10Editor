@@ -28,7 +28,7 @@ public class IC10EditorPlugin : BaseUnityPlugin
     public static ConfigEntry<bool> CollapseOnGameWindow;
     public static ConfigEntry<bool> RelativeLineNumbers;
     public static ConfigEntry<bool> RestoreSelectedHousing;
-    
+
     public static ConfigEntry<bool> EnableVersionControl;
 
     public static Dictionary<string, ConfigEntry<string>> Colors = new();
@@ -202,7 +202,7 @@ public class IC10EditorPlugin : BaseUnityPlugin
         try
         {
             L.SetLogger(this.Logger);
-            L.Info( $"Awake {ThisModInfo.Info}");
+            L.Info($"Awake {ThisModInfo.Info}");
             Instance = this;
             BindAllConfigs();
 

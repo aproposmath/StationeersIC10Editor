@@ -505,8 +505,8 @@ public class KeyHandler
     }
 
     private bool _isSelecting = false;
-    private double _timeLastMouseMove = 0.0;
-    private Vector2 _lastMousePos = new Vector2(0, 0);
+    private static double _timeLastMouseMove = 0.0;
+    private static Vector2 _lastMousePos = new Vector2(0, 0);
 
     private VimCommand CurrentCommand;
     private VimCommand LastCommand;
@@ -556,11 +556,10 @@ public class KeyHandler
         return Editor.Clamp(Editor.Move(pos, action));
     }
 
-    public bool IsMouseIdle(double idleTime)
+    public static bool IsMouseIdle(double idleTime)
     {
         return (ImGui.GetTime() - _timeLastMouseMove) >= idleTime;
     }
-
 
     public void InsertMode(bool doRecordInput = false)
     {
@@ -675,6 +674,8 @@ public class KeyHandler
         if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl))
         {
             // these combos are not captured by ImGui for some reason, so handle them via Unity Input
+            if (Input.GetKeyDown(KeyCode.H) && !Window.IsMotherboard)
+                Window.ActiveTab.VersionWindow.Open();
             if (Input.GetKeyDown(KeyCode.S))
                 CommandStatus = Editor.Save(shift);
             if (Input.GetKeyDown(KeyCode.E))
@@ -682,7 +683,7 @@ public class KeyHandler
             if (Input.GetKeyDown(KeyCode.Q))
                 _isClosing = true;
             if (Input.GetKeyDown(KeyCode.L))
-                Window.ShowLibrarySearch();
+                LibrariesWindow.Open();
             if (Input.GetKeyDown(KeyCode.W))
                 Window.CloseTab();
 

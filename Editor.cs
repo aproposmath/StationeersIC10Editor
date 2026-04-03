@@ -3,6 +3,7 @@ namespace StationeersIC10Editor;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 
 using Assets.Scripts;
@@ -19,6 +20,7 @@ using ImGuiNET;
 
 using UnityEngine;
 
+using static ImGuiUtils;
 using static Settings;
 using static Utils;
 
@@ -64,9 +66,8 @@ public class ConfirmWindow
             )
         )
         {
-            ImGui.PushStyleColor(ImGuiCol.Text, ICodeFormatter.ColorWarning);
-            ImGui.Text(Message);
-            ImGui.PopStyleColor();
+            using (new ScopedStyleColor(ImGuiCol.Text, ICodeFormatter.ColorWarning))
+                ImGui.Text(Message);
             if (string.IsNullOrEmpty(InputPrompt) == false)
             {
                 ImGui.Text(InputPrompt);
@@ -161,8 +162,8 @@ public static class Settings
     public static bool RestoreSelectedHousing => IC10EditorPlugin.RestoreSelectedHousing.Value;
     public static bool EnableVersionControl => IC10EditorPlugin.EnableVersionControl.Value && FossilVCS.IsFossilExeValid;
 
-    public static Vector2 buttonSize => Scale * new Vector2(85, 0);
-    public static Vector2 smallButtonSize => Scale * new Vector2(50, 0);
+    public static Vector2 buttonSize => Scale * new Vector2(85, 30);
+    public static Vector2 smallButtonSize => Scale * new Vector2(50, 30);
 
     public const string LimitExceededMessage = "Size limit exceeded: cannot save or export.";
 
@@ -195,6 +196,8 @@ public static class Settings
         _lastScale = Scale;
         _lastLineSpacingOffset = LineSpacingOffset;
     }
+
+    public static bool ShowTooltip => KeyHandler.IsMouseIdle(TooltipDelay / 1000.0f);
 }
 
 public class Editor
@@ -607,7 +610,7 @@ public class Editor
     public TextPosition FindStringForward(TextPosition startPos, string searchTerm)
     {
         int lineIndex = startPos.Line;
-        if(lineIndex < 0 || lineIndex >= Lines.Count)
+        if (lineIndex < 0 || lineIndex >= Lines.Count)
             return new TextPosition(-1, -1);
 
         int colIndex = startPos.Col + 1;
@@ -1026,10 +1029,7 @@ public class Editor
 
     public string Save(bool doCommit = false)
     {
-        L.Debug($"Save: doCommit={doCommit}");
         doCommit = doCommit && EnableVersionControl;
-        L.Debug($"      doCommit={doCommit}");
-        
         if (PCM)
         {
             if (LimitExceeded)
@@ -1056,11 +1056,11 @@ public class Editor
                     try
                     {
                         FossilVCS.AddAndCommit(InstructionData.DirectoryPath.Name, _confirmWindow.UserInput);
-                        msg += " and commited";
+                        msg = $"Version saved: {_confirmWindow.UserInput}";
                     }
                     catch (Exception ex)
                     {
-                        msg += $" but failed to commit: {ex.Message}";
+                        msg = $"Failed to commit: {ex.Message}";
                     }
                 }
                 KeyHandler.CommandStatus = msg;
@@ -1227,14 +1227,13 @@ public class Editor
     {
         if (HasFocus && IsMouseInsideTextArea())
         {
-            ImGui.PushFont(ImGui.GetIO().Fonts.Fonts[0]);
+            using var _ = new ScopedFont(ImGui.GetIO().Fonts.Fonts[0]);
             if (KeyHandler.IsMouseIdle(TooltipDelay / 1000.0f))
             {
                 var pos = GetTextPositionFromMouse(false);
                 if (pos.Col >= 0)
                     CodeFormatter.DrawTooltip(ImGui.GetMousePos());
             }
-            ImGui.PopFont();
         }
     }
 }
@@ -1245,16 +1244,16 @@ public class EditorTab
     public EditorWindow ParentWindow;
     public InstructionData Library;
     public FileHistoryWindow VersionWindow;
-    
+
     public string Title => Library?.Title ?? "Motherboard";
 
-    public EditorTab(EditorWindow window, Editor editor, InstructionData lib )
+    public EditorTab(EditorWindow window, Editor editor, InstructionData lib)
     {
         Library = lib;
         ParentWindow = window;
         editor.ParentTab = this;
         Editors = new List<Editor> { editor };
-        VersionWindow = new FileHistoryWindow(lib);
+        VersionWindow = new FileHistoryWindow(this);
     }
 
     public int AddEditor(Editor editor)
@@ -1282,14 +1281,14 @@ public class EditorTab
 
     public void Draw(float availHeight)
     {
-        ImGui.PushFont(ImGui.GetIO().Fonts.Fonts[0]);
-        int n = Editors.Count;
+        using var _ = new ScopedFont(ImGui.GetIO().Fonts.Fonts[0]);
+        var n = Editors.Count;
         var p0 = ImGui.GetCursorScreenPos();
         var avail = ImGui.GetContentRegionAvail();
         var spacing = ImGui.GetStyle().ItemSpacing.x;
         avail.y = availHeight;
         avail.x = avail.x / n - spacing * (n - 1) / n;
-        for (int i = 0; i < n; i++)
+        for (var i = 0; i < n; i++)
         {
             var editor = Editors[i];
             editor.Update();
@@ -1298,7 +1297,6 @@ public class EditorTab
                 ImGui.SameLine();
             p0.x += avail.x + spacing;
         }
-        ImGui.PopFont();
         ImGui.SetCursorScreenPos(new Vector2(p0.x, p0.y + avail.y + ImGui.GetStyle().ItemSpacing.y));
         VersionWindow?.Draw();
     }
@@ -1341,7 +1339,6 @@ public class EditorWindow
     public TextRange Selection => ActiveEditor.Selection;
 
     bool LimitExceeded => ActiveTab[0].LimitExceeded;
-    string CommandStatus => ActiveTab[0].CommandStatus;
 
     private string Title = "IC10 Editor";
 
@@ -1353,18 +1350,6 @@ public class EditorWindow
 
     private bool Show = false;
 
-    private List<InstructionData> _libraryCodes = new List<InstructionData>();
-
-    public List<InstructionData> LibraryCodes => _libraryCodes;
-    HashSet<string> _libraryTitles;
-    private List<InstructionData> _librarySearchResults = new List<InstructionData>();
-
-    private bool _librarySearchVisible = false;
-    private string _librarySearchText = "";
-    public bool IsLibrarySearchVisible => _librarySearchVisible;
-
-    private bool _librarySearchJustOpened = false;
-    private int _librarySelectedIndex = -1;
 
     public async UniTask PublishLibrary(InstructionData data)
     {
@@ -1374,327 +1359,8 @@ public class EditorWindow
         }
         finally
         {
-            await LoadLibraries();
+            await LibrariesWindow.LoadLibraries();
         }
-    }
-
-    public async UniTask LoadLibraries()
-    {
-        var items = await NetworkManager.GetLocalAndWorkshopItems(
-            SteamTransport.WorkshopType.ICCode
-        );
-
-        var libs = new List<InstructionData>();
-        var titles = new HashSet<string>();
-
-        foreach (var item in items)
-        {
-            InstructionData data = InstructionData.GetFromFile(item.FilePathFullName);
-            data.ItemWrapper = item;
-            libs.Add(data);
-            titles.Add(data.Title);
-        }
-
-        await UniTask.SwitchToMainThread();
-        _libraryCodes = libs;
-        _libraryTitles = titles;
-
-        if (_librarySearchVisible)
-            PerformLibrarySearch(_librarySearchText);
-    }
-
-    public void ShowLibrarySearch()
-    {
-        _librarySearchVisible = true;
-        _librarySearchJustOpened = true;
-
-        ImGui.OpenPopup("Library Search");
-
-        LoadLibraries().Forget();
-    }
-
-    Editor _previewEditor = null;
-    ConfirmWindow _confirmDeleteLibWindow = null;
-    public void DrawLibrarySearchWindow()
-    {
-
-        if (!_librarySearchVisible)
-            return;
-
-        bool open = true;
-        ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 2.0f);
-        ImGui.SetNextWindowSize(new Vector2(1300, 800), ImGuiCond.FirstUseEver);
-        if (
-            ImGui.Begin("Library Search", ref open)
-        )
-        {
-            if (_librarySearchJustOpened)
-            {
-                ImGui.SetKeyboardFocusHere();
-                _librarySearchJustOpened = false;
-            }
-
-            ImGui.Text("Search libraries:");
-            ImGui.SameLine();
-            string oldSearchText = _librarySearchText;
-            ImGui.InputText(
-                "##LibrarySearch",
-                ref _librarySearchText,
-                256,
-                ImGuiInputTextFlags.EnterReturnsTrue
-            );
-
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.BeginTooltip();
-                ImGui.Text(
-                    "Load first matching entry with Enter key, or any entry with double-click."
-                );
-                ImGui.EndTooltip();
-            }
-
-            if (oldSearchText != _librarySearchText)
-                PerformLibrarySearch(_librarySearchText);
-
-            // Search if Enter pressed or text changed
-            if (
-                (ImGui.IsItemDeactivatedAfterEdit()
-                || ImGui.IsItemFocused()) && (ImGui.IsKeyPressed(ImGuiKey.Enter) || ImGui.IsKeyPressed(ImGuiKey.KeypadEnter))
-            )
-            {
-                if (_librarySearchResults.Count > 0)
-                    LoadLibraryEntry(_librarySearchResults[0]);
-            }
-
-            ImGui.SameLine();
-
-            bool libExists = _libraryTitles.Contains(_librarySearchText) || string.IsNullOrWhiteSpace(_librarySearchText);
-
-            if (libExists)
-            {
-                ImGui.PushStyleColor(ImGuiCol.Button, ICodeFormatter.ColorFromHTML("gray"));
-                ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ICodeFormatter.ColorFromHTML("gray"));
-                ImGui.PushStyleColor(ImGuiCol.ButtonActive, ICodeFormatter.ColorFromHTML("gray"));
-            }
-            if (ImGui.Button("New") && !libExists)
-            {
-                InputSourceCode.Paste(MotherboardTab[0].Code);
-                InputSourceCode.Instance.SaveNewWithName(_librarySearchText, "");
-                LoadLibraries().Forget();
-            }
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.BeginTooltip();
-                if (string.IsNullOrWhiteSpace(_librarySearchText))
-                    ImGui.Text("Please enter a valid library name to the search field to create a new entry.");
-                else if (libExists)
-                    ImGui.Text($"Library \"{_librarySearchText}\" already exists.");
-                else
-                    ImGui.Text("Creates a new library entry using the name in the search box and the current code.");
-                ImGui.EndTooltip();
-            }
-
-
-            if (libExists)
-            {
-                ImGui.PopStyleColor();
-                ImGui.PopStyleColor();
-                ImGui.PopStyleColor();
-            }
-
-            ImGui.Separator();
-
-            // Show results
-            if (_librarySearchResults.Count == 0)
-            {
-                ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1), "No results found.");
-            }
-            else
-            {
-                ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 0);
-                ImGui.BeginChild("LibrarySearchResults", new Vector2(500, 600), true);
-                for (int i = 0; i < _librarySearchResults.Count; i++)
-                {
-                    var lib = _librarySearchResults[i];
-
-                    var entryLabel = "";
-                    if (lib.WorkshopFileHandle != 0)
-                        entryLabel = $"{lib.Title} by {lib.Author} (workshop)";
-                    else
-                        entryLabel = $"{lib.Title} by {lib.Author} (local)";
-                    if (ImGui.Selectable(entryLabel, _librarySelectedIndex == i) || _librarySearchResults.Count == 1)
-                    {
-                        _librarySelectedIndex = i;
-
-                        if (_previewEditor == null)
-                        {
-                            _previewEditor = new Editor(KeyHandler, lib);
-                            _previewEditor.IsReadOnly = true;
-                        }
-                        _previewEditor.ResetCode(lib?.Instructions ?? "", false);
-                    }
-
-                    // Double-click to load
-                    if (
-                        ImGui.IsItemHovered()
-                        && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left)
-                    )
-                    {
-                        LoadLibraryEntry(lib);
-                    }
-                }
-                ImGui.EndChild();
-
-                ImGui.SameLine();
-                ImGui.BeginChild("LibrarySearchPreview", new Vector2(700, 600), true);
-
-                if (
-                    _librarySelectedIndex >= 0
-                    && _librarySelectedIndex < _librarySearchResults.Count
-                )
-                {
-                    var lib = _librarySearchResults[_librarySelectedIndex];
-                    ImGui.PushItemWidth(300);
-                    ImGui.Text($"Title:  {lib.Title}");
-                    ImGui.SameLine();
-                    ImGui.SetCursorPosX(330);
-                    if (ImGui.Button("Publish", buttonSize))
-                    {
-                        lib.PublishToWorkshop().Forget();
-                    }
-                    ImGui.SameLine();
-                    if (ImGui.Button("Delete", buttonSize))
-                    {
-                        _confirmDeleteLibWindow = new ConfirmWindow(
-                            $"Are you sure to delete the library '{lib.Title}'?"
-                        );
-                        _confirmDeleteLibWindow.OnConfirm = () =>
-                        {
-                            InputSourceCode.DeleteInstruction(lib.DirectoryPath.Name);
-                            LoadLibraries().Forget();
-                            _librarySelectedIndex = -1;
-                            _previewEditor = null;
-                            _confirmDeleteLibWindow = null;
-                        };
-                    }
-
-                    if (_confirmDeleteLibWindow != null)
-                    {
-                        if (!_confirmDeleteLibWindow.IsOpen)
-                            _confirmDeleteLibWindow = null;
-                        else
-                            _confirmDeleteLibWindow.Draw();
-                    }
-                    if (ImGui.IsItemHovered())
-                    {
-                        ImGui.BeginTooltip();
-                        ImGui.Text("Delete the library");
-                        ImGui.EndTooltip();
-                    }
-                    ImGui.SameLine();
-                    if (ImGui.Button("Copy", buttonSize))
-                        GameManager.Clipboard = lib.Instructions;
-
-                    if (ImGui.IsItemHovered())
-                    {
-                        ImGui.BeginTooltip();
-                        ImGui.Text("Copy code to clipboard");
-                        ImGui.EndTooltip();
-                    }
-                    ImGui.SameLine();
-                    if (ImGui.Button("Load", buttonSize))
-                        LoadLibraryEntry(lib);
-                    if (ImGui.IsItemHovered())
-                    {
-                        ImGui.BeginTooltip();
-                        ImGui.Text("Load this library into the editor");
-                        ImGui.EndTooltip();
-                    }
-                    ImGui.Text($"Author: {lib.Author}");
-                    var date = DateTime.FromFileTimeUtc(lib.DateTime);
-                    ImGui.Text($"Date:   {date.ToLocalTime()}");
-                    ImGui.TextWrapped($"Description:");
-                    ImGui.PopItemWidth();
-                    ImGui.SameLine();
-                    ImGui.SetCursorPosX(605);
-                    if (ImGui.Button("Save", buttonSize))
-                        lib.SaveToFile(lib.DirectoryPath);
-                    if (ImGui.IsItemHovered())
-                    {
-                        ImGui.BeginTooltip();
-                        ImGui.Text("Save desription");
-                        ImGui.EndTooltip();
-                    }
-                    ImGui.InputTextMultiline(
-                        "##LibraryDescriptionEdit",
-                        ref lib.Description,
-                        1024,
-                        new Vector2(675, 60)
-                    );
-                    ImGui.Separator();
-
-                    float heightAvailable = ImGui.GetContentRegionAvail().y - 10;
-
-                    _previewEditor.Update();
-                    ImGui.PushStyleVar(ImGuiStyleVar.ChildBorderSize, 0);
-                    _previewEditor.Draw(
-                        ImGui.GetCursorScreenPos(),
-                        new Vector2(670, heightAvailable),
-                        "##LibraryPreviewEditor"
-                    );
-                    ImGui.PopStyleVar();
-                }
-                ImGui.EndChild();
-
-                ImGui.PopStyleVar();
-            }
-
-            ImGui.Separator();
-            if (ImGui.Button("Close"))
-                _librarySearchVisible = false;
-            if (ImGui.IsKeyPressed(ImGuiKey.Escape))
-                _librarySearchVisible = false;
-
-            ImGui.End();
-        }
-        ImGui.PopStyleVar();
-
-        if (!open)
-            _librarySearchVisible = false;
-    }
-
-    private void PerformLibrarySearch(string query)
-    {
-        _librarySearchResults.Clear();
-
-        // if (string.IsNullOrWhiteSpace(query))
-        // return;
-
-        string q = query.Trim().ToLowerInvariant();
-
-        foreach (var lib in _libraryCodes)
-        {
-            if (
-                string.IsNullOrEmpty(q)
-                || lib.Title.ToLowerInvariant().Contains(q)
-                || lib.Instructions.ToLowerInvariant().Contains(q)
-            )
-            {
-                _librarySearchResults.Add(lib);
-            }
-        }
-    }
-
-    private void LoadLibraryEntry(InstructionData lib)
-    {
-        if (lib == null)
-            return;
-
-        var editor = new Editor(KeyHandler, lib);
-        editor.ResetCode(lib.Instructions);
-        Tabs.Add(new EditorTab(this, editor, lib));
-        _activeTabIndex = Tabs.Count - 1;
-        _librarySearchVisible = false;
     }
 
     public void SwitchToNativeEditor()
@@ -1717,21 +1383,21 @@ public class EditorWindow
         }
         ActiveTab.Save();
         if (!IsMotherboard)
-            LoadLibraries().Forget();
+            LibrariesWindow.LoadLibraries().Forget();
         HideWindow();
     }
 
-    public void Export(bool directlyToChip=false)
+    public void Export(bool directlyToChip = false)
     {
         if (!IsMotherboard)
         {
             // Apply code to motherboard tab
             MotherboardTab[0].ResetCode(ActiveEditor.Code);
-            if(!directlyToChip)
+            if (!directlyToChip)
                 _activeTabIndex = 0;
         }
-        
-        if(IsMotherboard || directlyToChip)
+
+        if (IsMotherboard || directlyToChip)
         {
             if (LimitExceeded)
             {
@@ -1802,25 +1468,22 @@ public class EditorWindow
 
     public void DrawHeader()
     {
-        // rounded buttons style
-        ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 5.0f);
-
-        if (ImGui.Button($"Library", buttonSize))
-            ShowLibrarySearch();
+        if (Button($"Library", buttonSize, "Load File from Library (Ctrl+L)"))
+            LibrariesWindow.Open();
 
         ImGui.SameLine();
 
-        if (ImGui.Button("Clear", buttonSize))
+        if (Button("Clear", buttonSize, "Clear Code"))
             ActiveTab[0].ClearCode();
 
         ImGui.SameLine();
 
-        if (ImGui.Button("Copy", buttonSize))
+        if (Button("Copy", buttonSize, "Copy Code to clipboard"))
             GameManager.Clipboard = Code;
 
         ImGui.SameLine();
 
-        if (ImGui.Button("Paste", buttonSize))
+        if (Button("Paste", buttonSize, "Paste Code from clipboard"))
         {
             ActiveTab[0].ClearCode();
             ActiveTab[0].Insert(GameManager.Clipboard);
@@ -1830,27 +1493,32 @@ public class EditorWindow
 
         ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 2 * ImGui.GetStyle().ItemSpacing.x);
 
-        if (ImGui.Button("?", smallButtonSize))
+        if (Button("?", smallButtonSize, "Help/Configuration Menu"))
             _helpWindowVisible = !_helpWindowVisible;
 
         ImGui.SameLine();
-        
+
         ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 2 * ImGui.GetStyle().ItemSpacing.x);
 
-        if (ImGui.Button("VCS", smallButtonSize) && !IsMotherboard)
-        {
+        if (Button("History", buttonSize, "Version History (Ctrl+H)", IsMotherboard))
             ActiveTab.VersionWindow.Open();
-            // _vcsWindow = new FileHistoryWindow();
-        }
-
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.BeginTooltip();
-            ImGui.Text("Version Control (only for libraries)");
-            ImGui.EndTooltip();
-        }
 
         ImGui.SameLine();
+
+        using (new ScopedFont(UI.ImGuiUi.ImguiHelper.GetFont(1), 2.0f))
+        {
+            ImGui.SetWindowFontScale(1.4f * Scale);
+            if (Button("⟲", smallButtonSize, "Undo (Ctrl+Z)", ActiveEditor.UndoList.Count == 0))
+                ActiveEditor.Undo();
+
+            ImGui.SameLine();
+
+            if (Button("⟳", smallButtonSize, "Redo (Ctrl+Y)", ActiveEditor.RedoList.Count == 0))
+                ActiveEditor.Undo();
+
+            ImGui.SameLine();
+            ImGui.SetWindowFontScale(Scale);
+        }
 
         float comboWidth = 130;
 
@@ -1871,7 +1539,7 @@ public class EditorWindow
         {
             foreach (var fmt in formatters)
             {
-                bool isSelected = fmt == formatter.Name;
+                var isSelected = fmt == formatter.Name;
                 if (ImGui.Selectable(fmt, isSelected))
                 {
                     var code = ActiveTab[0].Code;
@@ -1889,26 +1557,25 @@ public class EditorWindow
 
         ImGui.SameLine();
 
-        if (ImGui.Button("s(x)", smallButtonSize))
+        if (Button("s(x)", smallButtonSize, "Slot Variables"))
             ShowNativeWindow(HelpMode.SlotVariables);
 
         ImGui.SameLine();
 
-        if (ImGui.Button("x", smallButtonSize))
+        if (Button("x", smallButtonSize, "Variables"))
             ShowNativeWindow(HelpMode.Variables);
 
         ImGui.SameLine();
 
-        if (ImGui.Button("f", smallButtonSize))
+        if (Button("f", smallButtonSize, "Functions"))
             ShowNativeWindow(HelpMode.Functions);
 
         ImGui.SameLine();
 
-        bool isPaused = WorldManager.IsGamePaused;
-        if (ImGui.Button(isPaused ? "Resume" : "Pause", buttonSize))
+        var isPaused = WorldManager.IsGamePaused;
+        var pauseLabel = isPaused ? "Resume" : "Pause";
+        if (Button(pauseLabel, buttonSize, $"{pauseLabel} Game"))
             InputSourceCode.Instance.PauseGameToggle(!isPaused);
-
-        ImGui.PopStyleVar();
     }
 
     private static uint _colorGood = ICodeFormatter.ColorFromHTML("green");
@@ -1926,7 +1593,6 @@ public class EditorWindow
     {
         ImGui.SetCursorPosX(ImGui.GetStyle().FramePadding.x);
 
-        ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 5.0f);
         ImGui.Text($"{CaretLine,3}/{CaretCol,2},");
         ImGui.SameLine();
 
@@ -1936,9 +1602,9 @@ public class EditorWindow
         var code = Code;
 
         var drawList = ImGui.GetWindowDrawList();
-        var drawLimit = (bool enforce, int n, int limit, string unit) =>
+        void drawLimit(bool enforce, int n, int limit, string unit)
         {
-            uint color = _colorDefault;
+            var color = _colorDefault;
             var sValue = $" {n.ToString().PadLeft(2, ' ')}";
             if (enforce)
             {
@@ -1954,7 +1620,7 @@ public class EditorWindow
             pos.x += sValue.Length * CharWidth;
             drawList.AddText(pos, _colorDefault, $" {unit}");
             pos.x += (unit.Length + 1) * CharWidth;
-        };
+        }
 
         drawLimit(EnforceLineLimit, Lines.Count, 128, "lines,");
         drawLimit(EnforceLineLengthLimit, Lines.Max(line => line.Text.Length), 90, "chars,");
@@ -1969,58 +1635,41 @@ public class EditorWindow
 
         ImGui.SetCursorPosX(
             ImGui.GetWindowWidth()
-                - 3 * buttonSize.x
-                - ImGui.GetStyle().FramePadding.x * 4
+                - 4 * buttonSize.x
+                - ImGui.GetStyle().FramePadding.x * 5
                 - ImGui.GetStyle().ItemSpacing.x
         );
-        if (ImGui.Button("Cancel", buttonSize))
+
+        if (Button("Cancel", buttonSize, "Close Editor (Ctrl+Q)"))
             HideWindow();
 
         ImGui.SameLine();
 
-        bool limitExceeded = LimitExceeded;
-        if (limitExceeded)
-        {
-            ImGui.PushItemFlag(ImGuiItemFlags.Disabled, true);
-            ImGui.PushStyleColor(ImGuiCol.Button, ICodeFormatter.ColorFromHTML("gray"));
-        }
-
-        if (ImGui.Button(IsMotherboard ? "Export" : "To MB", buttonSize))
-            Export();
-
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.BeginTooltip();
-            ImGui.Text(
-                IsMotherboard
-                    ? "Close the editor and export the code to IC10 Chip."
-                    : "Apply code to the Motherboard tab"
-            );
-            ImGui.EndTooltip();
-        }
+        if (Button("Commit", buttonSize, "Add version to History (Ctrl+Shift+S)", IsMotherboard))
+            ActiveTab[0].Save(true);
 
         ImGui.SameLine();
+
+        var label = IsMotherboard ? "Export" : "To MB";
+        var tooltip = IsMotherboard
+            ? "Close the editor and export the code to IC10 Chip."
+            : "Apply code to the Motherboard tab";
+
+        if (Button(label, buttonSize, tooltip, LimitExceeded))
+            Export();
+
+        ImGui.SameLine();
+
         if (IsMotherboard)
         {
-            if (ImGui.Button("Confirm", buttonSize))
+            if (Button("Confirm", buttonSize, "Save to Motherboard and quit editor (Ctrl+S)"))
                 Confirm();
         }
-        else
-        {
-            if (ImGui.Button("Save", buttonSize))
-                KeyHandler.CommandStatus = ActiveTab[0].Save();
-        }
-
-        if (limitExceeded)
-        {
-            ImGui.PopStyleColor();
-            ImGui.PopItemFlag();
-        }
+        else if (Button("Save", buttonSize, "Save to Library (Ctrl+S)"))
+            KeyHandler.CommandStatus = ActiveTab[0].Save();
 
         KeyHandler.DrawStatus();
         ActiveTab[0].CodeFormatter.DrawStatus(ImGui.GetCursorScreenPos());
-
-        ImGui.PopStyleVar();
     }
 
     private bool _hasFocus = false;
@@ -2028,7 +1677,7 @@ public class EditorWindow
     private bool _didGameWindowOpen = false;
     private bool _didGameWindowClose = false;
 
-    public bool HasFocus => _hasFocus && !_librarySearchVisible && _confirmDeleteLibWindow == null && !(ActiveEditor._confirmWindow?.IsOpen ?? false);
+    public bool HasFocus => _hasFocus && !LibrariesWindow.IsOpen && !(ActiveEditor._confirmWindow?.IsOpen ?? false) && !(ActiveTab.VersionWindow?.IsOpen ?? false);
 
     public void CalcDidGameWindowOpen()
     {
@@ -2044,22 +1693,24 @@ public class EditorWindow
     }
 
     private Queue<double> _renderTimes = new();
-    private System.Diagnostics.Stopwatch _renderStopwatch;
+    private Stopwatch _renderStopwatch;
 
     public void Draw()
     {
         if (!Show)
             return;
 
+        LibrariesWindow.Window = this;
+
         if (_debugWindowVisible)
             _renderStopwatch = System.Diagnostics.Stopwatch.StartNew();
 
+        using var _fr = new ScopedStyleVar(ImGuiStyleVar.FrameRounding, 3.0f);
         // make sure the native editor is hidden
         InputSourceCode.Instance.Window.localPosition = new Vector3(-10000, -10000, 0);
 
-        ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.1f, 0.1f, 0.1f, 1.0f));
-        var io = ImGui.GetIO();
-        ImGui.PushFont(ImGui.GetIO().Fonts.Fonts[0]);
+        var _ = new ScopedStyleColor(ImGuiCol.WindowBg, ICodeFormatter.ColorFromVector4(0.1f, 0.1f, 0.1f, 1.0f));
+        var _f = new ScopedFont(ImGui.GetIO().Fonts.Fonts[0]);
 
         if (!IsInitialized)
         {
@@ -2128,7 +1779,7 @@ public class EditorWindow
         ImGui.EndTabBar();
 
         DrawFooter();
-        DrawLibrarySearchWindow();
+        LibrariesWindow.Draw();
 
         if (ActiveTab[0]._confirmWindow != null)
             ActiveTab[0]._confirmWindow.Draw();
@@ -2136,14 +1787,12 @@ public class EditorWindow
         ImGui.End();
         ImGui.PopStyleColor();
 
-        if (!IsLibrarySearchVisible)
+        if (HasFocus)
             foreach (var editor in ActiveTab.Editors)
                 editor.DrawTooltip();
 
         DrawHelpWindow();
         DrawDebugWindow();
-
-        ImGui.PopFont();
     }
 
     public void CloseTab(int index = -1)
@@ -2185,13 +1834,14 @@ public class EditorWindow
             entry.BoxedValue = value;
     }
 
+    static float FloatOptionWidth => ImGui.CalcTextSize("000000.00").x;
+
     private void DrawFloatOption(string label, ConfigEntry<float> entry, float min, float max)
     {
         var value = entry.Value;
-        ImGui.PushItemWidth(ImGui.CalcTextSize("000000.00").x);
-        if (ImGui.InputFloat(label, ref value))
+
+        if (InputFloat(label, ref value, FloatOptionWidth))
             entry.BoxedValue = value;
-        ImGui.PopItemWidth();
         ImGui.SameLine();
         if (ImGui.Button("Reset"))
         {
@@ -2203,26 +1853,23 @@ public class EditorWindow
     private void DrawFloatOption(string label, ConfigEntry<float> entry)
     {
         var value = entry.Value;
-        ImGui.PushItemWidth(ImGui.CalcTextSize("000000.00").x);
-        if (ImGui.InputFloat(label, ref value))
+        if (InputFloat(label, ref value, FloatOptionWidth))
             entry.BoxedValue = value;
-        ImGui.PopItemWidth();
     }
 
     private void DrawIntOption(string label, ConfigEntry<int> entry)
     {
         var value = entry.Value;
-        ImGui.PushItemWidth(ImGui.CalcTextSize("000000.00").x);
-        if (ImGui.InputInt(label, ref value, -20, 20))
+        if (InputInt(label, ref value, FloatOptionWidth, -20, 20))
             entry.BoxedValue = value;
-        ImGui.PopItemWidth();
     }
 
     public void DrawHelpWindow()
     {
         if (!_helpWindowVisible)
             return;
-        ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.2f, 0.2f, 0.2f, 1.0f));
+
+        using var _ = new ScopedStyleColor(ImGuiCol.WindowBg, ICodeFormatter.ColorFromVector4(0.2f, 0.2f, 0.2f, 1.0f));
         ImGui.SetNextWindowSize(Scale * new Vector2(600, 400), ImGuiCond.FirstUseEver);
         ImGui.Begin(
             "IC10 Editor Help",
@@ -2235,15 +1882,8 @@ public class EditorWindow
             "This is the IC10 Editor. It allows you to edit the source code of IC10 programs with syntax highlighting, undo/redo, and other features."
         );
 
-        if (ImGui.Button("Native", buttonSize))
+        if (Button("Native", buttonSize, "Switch to the native Stationeers IC10 editor."))
             SwitchToNativeEditor();
-
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.BeginTooltip();
-            ImGui.Text("Switch to the native Stationeers IC10 editor.");
-            ImGui.EndTooltip();
-        }
 
         ImGui.Separator();
         ImGui.Text("\nConfiguration:");
@@ -2339,7 +1979,6 @@ public class EditorWindow
 
         ImGui.Separator();
         ImGui.End();
-        ImGui.PopStyleColor();
     }
 
     public void DrawDebugWindow()
@@ -2347,7 +1986,7 @@ public class EditorWindow
         if (!_debugWindowVisible)
             return;
 
-        ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.2f, 0.2f, 0.2f, 1.0f));
+        using var _ = new ScopedStyleColor(ImGuiCol.WindowBg, Color(0.2f, 0.2f, 0.2f, 1.0f));
         ImGui.SetNextWindowSize(Scale * new Vector2(600, 400), ImGuiCond.FirstUseEver);
         ImGui.Begin(
             "IC10 Debug Window",
@@ -2406,7 +2045,6 @@ public class EditorWindow
 
         ImGui.Separator();
         ImGui.End();
-        ImGui.PopStyleColor();
     }
 
 }

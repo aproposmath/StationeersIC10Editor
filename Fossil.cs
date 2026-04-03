@@ -1,12 +1,13 @@
 namespace StationeersIC10Editor;
 
 using System;
-using System.IO;
-using System.Net;
-using System.IO.Compression;
-using System.Diagnostics;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Net;
+using System.Xml.Serialization;
 
 using Assets.Scripts.UI;
 
@@ -14,6 +15,7 @@ using ImGuiNET;
 
 using UnityEngine;
 
+using static ImGuiUtils;
 
 public class FossilVCS
 {
@@ -108,7 +110,7 @@ public class FossilVCS
         catch (Exception ex)
         {
             if (ex.Message.Contains("allow-empty"))
-                return;
+                throw new Exception("no changes to commit");
             throw;
         }
     }
@@ -120,7 +122,7 @@ public class FossilVCS
         var log = Run($"timeline -p \"{path}\" --format \"%h\t%d\t%c\"");
         L.Debug($"Log result: {log}");
         var lines = log.Replace("\r\n", "\n").Split('\n').Select(l => l.Trim()).Where(l => !string.IsNullOrEmpty(l));
-        
+
         var result = new List<FileVersion>();
         foreach (var line in lines)
         {
@@ -132,7 +134,7 @@ public class FossilVCS
             var message = parts[2];
             for (var i = 3; i < parts.Length; i++)
                 message += "_" + parts[i];
-            
+
             result.Add(new FileVersion { Path = path, Hash = parts[0], Date = parts[1], Message = message });
         }
         return result;
@@ -206,47 +208,47 @@ public class FileVersion
     public string Hash;
     public string Date;
     public string Message;
-    public string _Content = null;
+    public InstructionData Library = null;
 
+    public string _RawContent = null;
     public string Content
     {
         get
         {
-            if (_Content == null)
+            if (Library == null)
             {
-                const string startTag = "<Instructions>";
-                const string endTag = "</Instructions>";
-                var content = FossilVCS.Run($"cat \"{Path}\\instruction.xml\" -r {Hash}");
-                var startIndex = content.IndexOf(startTag, StringComparison.Ordinal) + startTag.Length;
-                var endIndex = content.IndexOf(endTag, startIndex, StringComparison.Ordinal);
-                L.Debug($"Content: {content}, startIndex: {startIndex}, endIndex: {endIndex}");
-                _Content = content.Substring(startIndex, endIndex - startIndex);
+                _RawContent = FossilVCS.Run($"cat \"{Path}\\instruction.xml\" -r {Hash}");
+                var xmlSerializer = new XmlSerializer(typeof(InstructionData));
+                using var textReader = new StringReader(_RawContent);
+                Library = (InstructionData)xmlSerializer.Deserialize(textReader);
             }
-            return _Content;
+            return Library.Instructions;
         }
     }
-    
-    public string Label => $"{Date} - {Message}";
+
+    public string Label => string.IsNullOrEmpty(Date) || string.IsNullOrEmpty(Message) ? $"{Date}{Message}" : $"{Date} - {Message}";
 }
 
 
 public class FileHistoryWindow
 {
     public bool IsOpen = false;
-    public InstructionData Library;
     public List<FileVersion> Versions = new List<FileVersion>();
     private Editor _previewEditor;
+    public FileVersion SelectedVersion = null;
+    private EditorTab _tab;
+    public InstructionData Library => _tab.Library;
 
-    public FileHistoryWindow(InstructionData data)
+    public FileHistoryWindow(EditorTab tab)
     {
-        Library = data;
+        _tab = tab;
     }
 
     public void Open()
     {
         IsOpen = true;
         Versions = FossilVCS.Log(Library.DirectoryPath.Name);
-        var currentVersion = new FileVersion { Hash = "", Path = "", Date = "", Message = "Current save", _Content = Library.Instructions };
+        var currentVersion = new FileVersion { Hash = "", Path = "", Date = "", Message = "Last saved", Library = Library };
         Versions.Insert(0, currentVersion);
     }
 
@@ -254,45 +256,62 @@ public class FileHistoryWindow
     {
         IsOpen = false;
     }
-    
+
     public void Draw()
     {
         if (!IsOpen)
             return;
-        ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 2.0f);
+        using var _ = new ScopedStyleVar(ImGuiStyleVar.FrameRounding, 2.0f);
         ImGui.SetNextWindowSize(new Vector2(1300, 800), ImGuiCond.FirstUseEver);
         if (
-            ImGui.Begin($"Version History of {Library.Title}", ref IsOpen)
+            ImGui.Begin($"Version History: {Library.Title}", ref IsOpen)
         )
         {
-            ImGui.BeginChild("Versions", new Vector2(500, 600), true);
-            foreach (var version in Versions)
+            using (new Pane("Versions", 0.4f))
             {
-                if (ImGui.Selectable(version.Label))
+                foreach (var version in Versions)
                 {
-                    if (_previewEditor == null)
+                    if (ImGui.Selectable(version.Label, SelectedVersion == version))
                     {
-                        _previewEditor = new Editor(null, Library);
-                        _previewEditor.IsReadOnly = true;
+                        SelectedVersion = version;
+                        if (_previewEditor == null)
+                        {
+                            _previewEditor = new Editor(null, Library);
+                            _previewEditor.IsReadOnly = true;
+                        }
+                        _previewEditor.ResetCode(version.Content, false);
                     }
-                    _previewEditor.ResetCode(version.Content, false);
                 }
             }
-            ImGui.EndChild();
+
             ImGui.SameLine();
-            ImGui.BeginChild("LibrarySearchPreview", new Vector2(700, 600), true);
-            _previewEditor.Update();
-            ImGui.PushStyleVar(ImGuiStyleVar.ChildBorderSize, 0);
-            _previewEditor.Draw(
-                ImGui.GetCursorScreenPos(),
-                new Vector2(670, 600),
-                "##LibraryVersionPreviewEditor"
-            );
-            ImGui.PopStyleVar();
-            ImGui.EndChild();
-            
-            if(ImGui.Button("Close"))
+
+            using (new Pane("LibrarySearchPreview"))
             {
+                if (_previewEditor != null)
+                {
+                    _previewEditor.Update();
+                    using var __ = new ScopedStyleVar(ImGuiStyleVar.ChildBorderSize, 0);
+                    _previewEditor.Draw(
+                        ImGui.GetCursorScreenPos(),
+                        ImGui.GetContentRegionAvail(),
+                        "##LibraryVersionPreviewEditor"
+                    );
+                }
+            }
+
+            var buttonSize = new Vector2(100, 0);
+
+            if (Button("Close", buttonSize))
+                IsOpen = false;
+
+            ImGui.SameLine();
+
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().x - buttonSize.x - ImGui.GetStyle().FramePadding.x);
+
+            if (Button("Load", buttonSize, "Load this version into editor", SelectedVersion == null))
+            {
+                _tab.Editors[0].ResetCode(SelectedVersion.Content);
                 IsOpen = false;
             }
         }
