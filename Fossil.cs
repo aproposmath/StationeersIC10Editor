@@ -19,18 +19,29 @@ using UnityEngine;
 
 using static ImGuiUtils;
 
-public class FossilVCS
+public static class FossilInstaller
 {
     public static string CacheDir => Path.Combine(BepInEx.Paths.CachePath, "ic10editor");
-    public const string FossilVersion = "2.28";
-    public const string FossilZipName = $"fossil-w64-{FossilVersion}.zip";
-    public static readonly string FossilZipPath = Path.Combine(CacheDir, FossilZipName);
-    public const string FossilDownloadUrl = $"https://www3.fossil-scm.org/home/uv/{FossilZipName}";
-    public static readonly string FossilExe = Path.Combine(CacheDir, "fossil.exe");
-    public static readonly string FossilExeSHA256 = "4a7886f3a49429b6f802e5ac89a3adf349f910cbe6376c5cb120bf4a958eb0fe";
-
     public static readonly string ScriptsDir = StationSaveUtils.GetSavePathScriptsSubDir().FullName;
-    public static readonly string RepoFilePath = Path.Combine(ScriptsDir, ".fossil.repo");
+
+    public static bool IsWine()
+    {
+        var wineLoader = Environment.GetEnvironmentVariable("WINELOADERNOEXEC");
+        var winePrefix = Environment.GetEnvironmentVariable("WINEPREFIX");
+        return wineLoader != null || winePrefix != null;
+    }
+
+    public static string PlatformSuffix => IsWine() ? "-wine" : "";
+
+    public const string FossilVersion = "2.28";
+    public static readonly string FossilZipName = $"fossil-{FossilVersion}.zip";
+    public static readonly string FossilZipPath = Path.Combine(CacheDir, FossilZipName);
+
+    public static readonly string FossilDownloadUrl = "https://github.com/aproposmath/StationeersIC10Editor/releases/download/assets/fossil-2.28.zip";
+    public static readonly string FossilExe = Path.Combine(CacheDir, $"fossil{PlatformSuffix}.exe");
+    public static readonly string FossilExeSHA256 = IsWine() ?
+        "ca154cabb98b5278009c7bba38afcfcf2de5a1ef7971b9aeff12c9bf6772dc89" :
+        "4a7886f3a49429b6f802e5ac89a3adf349f910cbe6376c5cb120bf4a958eb0fe";
 
     private static bool _IsFossilExeVerified = false;
 
@@ -49,13 +60,63 @@ public class FossilVCS
         }
     }
 
+    public static void EnsureInstalled()
+    {
+        L.Debug($"Ensuring Fossil {FossilVersion} is installed");
+
+        if (IsFossilExeValid)
+            return;
+
+        if (!File.Exists(CacheDir))
+            Directory.CreateDirectory(CacheDir);
+
+        for (var retry = 0; retry < 3; retry++)
+        {
+
+            if (File.Exists(FossilExe))
+                File.Delete(FossilExe);
+
+            if (File.Exists(FossilZipPath))
+                File.Delete(FossilZipPath);
+
+            L.Debug($"Downloading Fossil {FossilVersion} from {FossilDownloadUrl}");
+            var client = new WebClient();
+            client.DownloadFile(FossilDownloadUrl, FossilZipPath);
+            using var archive = ZipFile.OpenRead(FossilZipPath);
+            L.Debug($"Extracting Fossil {FossilVersion} from {FossilZipPath} to {CacheDir}");
+            archive.ExtractToDirectory(CacheDir);
+
+            if (IsFossilExeValid)
+                return;
+        }
+
+        throw new InvalidOperationException($"Fossil executable {FossilExe} is corrupted.");
+    }
+
+    public static string ComputeSHA256(string filePath)
+    {
+        using var sha256 = System.Security.Cryptography.SHA256.Create();
+        using var stream = File.OpenRead(filePath);
+        var hash = sha256.ComputeHash(stream);
+        return BitConverter.ToString(hash).Replace("-", "").ToLower();
+    }
+
+}
+
+public class FossilVCS
+{
+    public static readonly string ScriptsDir = FossilInstaller.ScriptsDir;
+    public static readonly string CacheDir = FossilInstaller.CacheDir;
+    public static readonly string RepoFilePath = Path.Combine(ScriptsDir, ".fossil.repo");
+
+
     public static async UniTask<string> RunAsync(string args)
     {
         L.Debug($"Running Fossil command: \"{args}\" at \"{ScriptsDir}\"");
         var sw = Stopwatch.StartNew();
         var psi = new ProcessStartInfo
         {
-            FileName = FossilExe,
+            FileName = FossilInstaller.FossilExe,
             Arguments = args,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -88,7 +149,7 @@ public class FossilVCS
         L.Debug($"Running Fossil command: \"{args}\" at \"{ScriptsDir}\"");
         var psi = new ProcessStartInfo
         {
-            FileName = FossilExe,
+            FileName = FossilInstaller.FossilExe,
             Arguments = args,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -116,7 +177,7 @@ public class FossilVCS
     {
         L.Debug($"Initializing Fossil repository at {RepoFilePath}");
         await UniTask.SwitchToThreadPool();
-        EnsureInstalled();
+        FossilInstaller.EnsureInstalled();
 
         var repoName = Path.GetFileName(RepoFilePath);
 
@@ -229,47 +290,6 @@ public class FossilVCS
         if (!string.IsNullOrEmpty(diff))
             diff = diff.Substring(0, diff.LastIndexOf('\n') + 1);
         return diff;
-    }
-
-    public static void EnsureInstalled()
-    {
-        L.Debug($"Ensuring Fossil {FossilVersion} is installed");
-
-        if (IsFossilExeValid)
-            return;
-
-        if (!File.Exists(CacheDir))
-            Directory.CreateDirectory(CacheDir);
-
-        for (var retry = 0; retry < 3; retry++)
-        {
-
-            if (File.Exists(FossilExe))
-                File.Delete(FossilExe);
-
-            if (File.Exists(FossilZipPath))
-                File.Delete(FossilZipPath);
-
-            L.Debug($"Downloading Fossil {FossilVersion} from {FossilDownloadUrl}");
-            var client = new WebClient();
-            client.DownloadFile(FossilDownloadUrl, FossilZipPath);
-            using var archive = ZipFile.OpenRead(FossilZipPath);
-            L.Debug($"Extracting Fossil {FossilVersion} from {FossilZipPath} to {CacheDir}");
-            archive.ExtractToDirectory(CacheDir);
-
-            if (IsFossilExeValid)
-                return;
-        }
-
-        throw new InvalidOperationException($"Fossil executable {FossilExe} is corrupted.");
-    }
-
-    public static string ComputeSHA256(string filePath)
-    {
-        using var sha256 = System.Security.Cryptography.SHA256.Create();
-        using var stream = File.OpenRead(filePath);
-        var hash = sha256.ComputeHash(stream);
-        return BitConverter.ToString(hash).Replace("-", "").ToLower();
     }
 
 }

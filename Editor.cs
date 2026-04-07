@@ -169,7 +169,7 @@ public static class Settings
     public static bool CollapseOnGameWindow => IC10EditorPlugin.CollapseOnGameWindow.Value;
     public static bool RelativeLineNumbers => IC10EditorPlugin.RelativeLineNumbers.Value;
     public static bool RestoreSelectedHousing => IC10EditorPlugin.RestoreSelectedHousing.Value;
-    public static bool EnableVersionControl => IC10EditorPlugin.EnableVersionControl.Value && FossilVCS.IsFossilExeValid;
+    public static bool EnableVersionControl => IC10EditorPlugin.EnableVersionControl.Value && FossilInstaller.IsFossilExeValid;
 
     public static Vector2 buttonSize => Scale * new Vector2(85, 30);
     public static Vector2 smallButtonSize => Scale * new Vector2(50, 30);
