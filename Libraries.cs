@@ -2,17 +2,12 @@ namespace StationeersIC10Editor;
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
-using System.Linq;
 
 using Assets.Scripts;
 using Assets.Scripts.Networking;
 using Assets.Scripts.Networking.Transports;
-using Assets.Scripts.Objects.Motherboards;
 using Assets.Scripts.UI;
-
-using BepInEx.Configuration;
 
 using Cysharp.Threading.Tasks;
 
@@ -22,25 +17,142 @@ using UnityEngine;
 
 using static ImGuiUtils;
 using static Settings;
-using static Utils;
 
+public class VersionedLibrary
+{
+    public InstructionData Data;
+    public FileState State = FileState.Untracked;
+
+    public VersionedLibrary(InstructionData data)
+    {
+        Data = data;
+    }
+
+    static readonly Dictionary<FileState, uint> Colors = new()
+    {
+        { FileState.Untracked, ICodeFormatter.ColorFromHTML("red") },
+        { FileState.Unchanged, ICodeFormatter.ColorFromHTML("green") },
+        { FileState.Modified, ICodeFormatter.ColorFromHTML("yellow") },
+    };
+
+    public uint Color => Colors[State];
+
+    public void UpdateFileState(Dictionary<string, FileState> fileStates)
+    {
+        State = FileState.Untracked;
+        if (fileStates.TryGetValue(Data.DirectoryPath.Name, out var state))
+            State = state;
+        else
+            L.Warning($"File state not found for library: {Data.DirectoryPath.Name}");
+    }
+
+    public void Save()
+    {
+        Data.SaveToFile(Data.DirectoryPath);
+        UpdateFileState().Forget();
+    }
+
+    public async UniTaskVoid UpdateFileState()
+    {
+        L.Debug($"Updating file state for library: {Data.DirectoryPath.Name}, State: {State}");
+        State = await FossilVCS.GetFileState(Data.DirectoryPath.Name + "/instruction.xml");
+        L.Debug($"File state for library {Data.DirectoryPath.Name}: {State}");
+    }
+}
+
+public class LibNode
+{
+    public string Name;
+    public List<LibNode> Children = new List<LibNode>();
+    public VersionedLibrary Library = null;
+    public string Prefix = "";
+
+    public void Draw(bool flat = false)
+    {
+        if (Library != null)
+        {
+            var title = Library.Data.Title;
+            if (!flat && Prefix.Length > 0)
+                title = title.Substring(Prefix.Length + 1);
+            if (Library.Data.WorkshopFileHandle != 0)
+                title += " by " + Library.Data.Author;
+
+            uint color = Library.Color;
+            float radius = 3.0f; ;
+            var drawList = ImGui.GetWindowDrawList();
+            drawList.AddCircleFilled(ImGui.GetCursorScreenPos() + new Vector2(0, LineHeightWithSpacing / 2), radius, color, 12);
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + radius * 2 + 5);
+            if (ImGui.Selectable(title, LibrariesWindow.Selected == Library) || LibrariesWindow._librarySearchResults.Count == 1)
+            {
+                LibrariesWindow.Selected = Library;
+
+                if (LibrariesWindow._previewEditor == null)
+                {
+                    LibrariesWindow._previewEditor = new Editor(LibrariesWindow.Window.ActiveEditor.KeyHandler, Library);
+                    LibrariesWindow._previewEditor.IsReadOnly = true;
+                }
+                LibrariesWindow._previewEditor.ResetCode(Library?.Data.Instructions ?? "", false);
+            }
+
+            // Double-click to load
+            if (
+                ImGui.IsItemHovered()
+                && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left)
+            )
+            {
+                LibrariesWindow.LoadLibraryEntry(Library);
+            }
+            if (Children.Count == 0)
+                return;
+        }
+
+        if (flat)
+        {
+            foreach (var child in Children)
+                child.Draw(flat);
+            return;
+        }
+
+        if (ImGui.TreeNode(Name))
+        {
+            foreach (var child in Children)
+                child.Draw();
+            ImGui.TreePop();
+        }
+    }
+}
 
 public static class LibrariesWindow
 {
     private static bool _open = false;
-    private static List<InstructionData> _libraryCodes = new List<InstructionData>();
+    private static List<VersionedLibrary> _libraryCodes = new List<VersionedLibrary>();
 
-    public static List<InstructionData> LibraryCodes => _libraryCodes;
-    private static List<InstructionData> _librarySearchResults = new List<InstructionData>();
+    public static List<VersionedLibrary> LibraryCodes => _libraryCodes;
+    public static List<VersionedLibrary> _librarySearchResults = new List<VersionedLibrary>();
+    public static Dictionary<string, FileState> _fileStates = new Dictionary<string, FileState>();
+
+    public static List<LibNode> OuterNodes = new List<LibNode>();
 
     static HashSet<string> _libraryTitles;
     private static string _librarySearchText = "";
 
     private static bool _librarySearchJustOpened = false;
-    private static int _librarySelectedIndex = -1;
+    public static VersionedLibrary Selected = null;
 
     public static bool IsOpen => _open;
     public static EditorWindow Window;
+
+    private static bool _searchWholeText = false;
+    private static bool _showWorkshopItems = true;
+    private static bool _showLocalItems = true;
+    private static bool _showUntracked = true;
+    private static bool _showModified = true;
+    private static bool _showUnchanged = true;
+    private static char _dirSeparator = '|';
+
+    private static bool _flatView = false;
+
+    private static ConfirmWindow _newLibWindow = null;
 
     public static void Draw()
     {
@@ -50,185 +162,130 @@ public static class LibrariesWindow
         bool open = true;
 
         ImGui.SetNextWindowSize(new Vector2(1300, 800), ImGuiCond.FirstUseEver);
+        using var _bg = new ScopedStyleColor(ImGuiCol.WindowBg, ICodeFormatter.ColorFromVector4(0.1f, 0.1f, 0.1f, 1.0f));
+
         if (
             ImGui.Begin("Library Search", ref open)
         )
         {
+            using var _ = new ScopedStyleColor(ImGuiCol.FrameBg, ICodeFormatter.ColorFromVector4(0.2f, 0.2f, 0.2f, 1.0f));
             if (_librarySearchJustOpened)
             {
                 ImGui.SetKeyboardFocusHere();
                 _librarySearchJustOpened = false;
             }
 
-            ImGui.Text("Search libraries:");
+            var width = ImGui.GetContentRegionAvail().x;
+
+            ImGui.Text("Search:");
             ImGui.SameLine();
             var oldSearchText = _librarySearchText;
-            ImGui.InputText(
+            InputText(
                 "##LibrarySearch",
                 ref _librarySearchText,
-                256,
-                ImGuiInputTextFlags.EnterReturnsTrue
+                20 * CharWidth
             );
 
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip("Load first matching entry with Enter key, or any entry with double-click.");
 
             if (oldSearchText != _librarySearchText)
-                Search(_librarySearchText);
+                Search();
 
-            // Search if Enter pressed or text changed
+            // Load first entry when Enter pressed
             if (
                 (ImGui.IsItemDeactivatedAfterEdit()
                 || ImGui.IsItemFocused()) && (ImGui.IsKeyPressed(ImGuiKey.Enter) || ImGui.IsKeyPressed(ImGuiKey.KeypadEnter))
-            )
-            {
-                if (_librarySearchResults.Count > 0)
-                    LoadLibraryEntry(_librarySearchResults[0]);
-            }
+                && _librarySearchResults.Count > 0)
+                LoadLibraryEntry(_librarySearchResults[0]);
 
             ImGui.SameLine();
 
-            var libExists = _libraryTitles.Contains(_librarySearchText) || string.IsNullOrWhiteSpace(_librarySearchText);
+            if (Checkbox("Whole Text  ", ref _searchWholeText, "Search also the code of the library."))
+                Search();
 
-            var tooltip = "Creates a new library entry using the name in the search box and the current code.";
-            if (libExists)
-                tooltip = $"Library \"{_librarySearchText}\" already exists.";
-            else if (string.IsNullOrWhiteSpace(_librarySearchText))
-                tooltip = "Please enter a valid library name to the search field to create a new entry.";
+            ImGui.SameLine();
 
-            if (Button("New", Vector2.zero, tooltip, libExists))
+            if (Checkbox("Workshop", ref _showWorkshopItems, "Show subscribed Steam workshop libraries."))
+                Search();
+
+            ImGui.SameLine();
+
+            if (Checkbox("Local  ", ref _showLocalItems, "Show local libraries."))
+                Search();
+
+            ImGui.SameLine();
+
+            if (Checkbox("Untracked", ref _showUntracked, "Show untracked libraries\n  -> no versioned saved yet, red dot"))
+                Search();
+
+            ImGui.SameLine();
+
+            if (Checkbox("Modified", ref _showModified, "Show modified libraries\n  -> changes since last version detected, yellow dot"))
+                Search();
+
+            ImGui.SameLine();
+
+            if (Checkbox("Unchanged  ", ref _showUnchanged, "Show unchanged libraries\n  -> no changes since last version, green dot"))
+                Search();
+
+            ImGui.SameLine();
+
+            ImGui.Checkbox("Flat", ref _flatView);
+
+            ImGui.SameLine();
+            ImGui.SetCursorPosX(width - buttonSize.x - 0 * ImGui.GetStyle().ItemSpacing.x);
+            if (Button("New", buttonSize, "Create new library from current Motherboard code (Ctrl+N)") ||
+                ((ImGui.IsKeyPressed(ImGuiKey.LeftCtrl) || ImGui.IsKeyPressed(ImGuiKey.RightCtrl)) && ImGui.IsKeyPressed(ImGuiKey.N)))
             {
-                InputSourceCode.Paste(Window.MotherboardTab[0].Code);
-                InputSourceCode.Instance.SaveNewWithName(_librarySearchText, "");
-                LoadLibraries().Forget();
-            }
-
-
-            ImGui.Separator();
-
-            // Show results
-            if (_librarySearchResults.Count == 0)
-            {
-                ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1), "No results found.");
-            }
-            else
-            {
-                using var _ = new ScopedStyleVar(ImGuiStyleVar.WindowBorderSize, 0);
-                ImGui.BeginChild("LibrarySearchResults", new Vector2(500, 600), true);
-                for (int i = 0; i < _librarySearchResults.Count; i++)
+                _newLibWindow = new ConfirmWindow($"Create new library", null, "Title:");
+                _newLibWindow.OnConfirm = () =>
                 {
-                    var lib = _librarySearchResults[i];
-
-                    var entryLabel = "";
-                    if (lib.WorkshopFileHandle != 0)
-                        entryLabel = $"{lib.Title} by {lib.Author} (workshop)";
-                    else
-                        entryLabel = $"{lib.Title} by {lib.Author} (local)";
-                    if (ImGui.Selectable(entryLabel, _librarySelectedIndex == i) || _librarySearchResults.Count == 1)
-                    {
-                        _librarySelectedIndex = i;
-
-                        if (_previewEditor == null)
-                        {
-                            _previewEditor = new Editor(Window.ActiveEditor.KeyHandler, lib);
-                            _previewEditor.IsReadOnly = true;
-                        }
-                        _previewEditor.ResetCode(lib?.Instructions ?? "", false);
-                    }
-
-                    // Double-click to load
-                    if (
-                        ImGui.IsItemHovered()
-                        && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left)
-                    )
-                    {
-                        LoadLibraryEntry(lib);
-                    }
-                }
-                ImGui.EndChild();
-
-                ImGui.SameLine();
-                ImGui.BeginChild("LibrarySearchPreview", new Vector2(700, 600), true);
-
-                if (
-                    _librarySelectedIndex >= 0
-                    && _librarySelectedIndex < _librarySearchResults.Count
-                )
-                {
-                    var lib = _librarySearchResults[_librarySelectedIndex];
-                    Text($"Title:  {lib.Title}", 300);
-                    ImGui.SameLine();
-                    ImGui.SetCursorPosX(330);
-                    if (Button("Publish", buttonSize, "Publish the library to the workshop"))
-                        lib.PublishToWorkshop().Forget();
-                    ImGui.SameLine();
-                    if (Button("Delete", buttonSize, "Delete the library"))
-                    {
-                        _confirmDeleteLibWindow = new ConfirmWindow(
-                            $"Are you sure to delete the library '{lib.Title}'?"
-                        );
-                        _confirmDeleteLibWindow.OnConfirm = () =>
-                        {
-                            InputSourceCode.DeleteInstruction(lib.DirectoryPath.Name);
-                            LoadLibraries().Forget();
-                            _librarySelectedIndex = -1;
-                            _previewEditor = null;
-                            _confirmDeleteLibWindow = null;
-                        };
-                    }
-
-                    if (_confirmDeleteLibWindow != null)
-                    {
-                        if (!_confirmDeleteLibWindow.IsOpen)
-                            _confirmDeleteLibWindow = null;
-                        else
-                            _confirmDeleteLibWindow.Draw();
-                    }
-
-                    ImGui.SameLine();
-                    if (Button("Copy", buttonSize, "Copy code to clipboard"))
-                        GameManager.Clipboard = lib.Instructions;
-
-                    ImGui.SameLine();
-                    if (Button("Load", buttonSize, "Load this library into the editor"))
-                        LoadLibraryEntry(lib);
-
-                    ImGui.Text($"Author: {lib.Author}");
-                    var date = DateTime.FromFileTimeUtc(lib.DateTime);
-                    ImGui.Text($"Date:   {date.ToLocalTime()}");
-                    ImGui.TextWrapped($"Description:");
-                    ImGui.SameLine();
-                    ImGui.SetCursorPosX(605);
-                    if (Button("Save", buttonSize, "Save description"))
-                        lib.SaveToFile(lib.DirectoryPath);
-                    ImGui.InputTextMultiline(
-                        "##LibraryDescriptionEdit",
-                        ref lib.Description,
-                        1024,
-                        new Vector2(675, 60)
-                    );
-                    ImGui.Separator();
-
-                    var heightAvailable = ImGui.GetContentRegionAvail().y - 10;
-
-                    _previewEditor.Update();
-                    using var _cbs = new ScopedStyleVar(ImGuiStyleVar.ChildBorderSize, 0);
-                    _previewEditor.Draw(
-                        ImGui.GetCursorScreenPos(),
-                        new Vector2(670, heightAvailable),
-                        "##LibraryPreviewEditor"
-                    );
-                }
-                ImGui.EndChild();
+                    InputSourceCode.Paste(Window.MotherboardTab[0].Code);
+                    InputSourceCode.Instance.SaveNewWithName(_newLibWindow.UserInput, "");
+                    LoadLibraries().Forget();
+                    _newLibWindow = null;
+                };
             }
 
-            ImGui.Separator();
-            if (ImGui.Button("Close"))
-                _open = false;
+
+
+            // ImGui.SameLine();
+            // ImGui.Text("  Separator");
+            // ImGui.SameLine();
+
+            // string sep = _dirSeparator.ToString();
+            // if (InputText(
+            //     "##DirSeparator",
+            //     ref sep,
+            //     3 * CharWidth
+            // ))
+            // {
+            //     if (sep.Length >= 1)
+            //         _dirSeparator = sep[0];
+            //     else
+            //         _dirSeparator = '|';
+            //     Search();
+            // }
+
+
+            // ImGui.Separator();
+
+            DrawLibrarySearchResults();
+            ImGui.SameLine();
+            DrawSelectedLibrary();
+
+            // ImGui.Separator();
+            // if (ImGui.Button("Close"))
+            //     _open = false;
             if (ImGui.IsKeyPressed(ImGuiKey.Escape))
                 _open = false;
 
+            if (_newLibWindow != null)
+                _newLibWindow.Draw();
+
             ImGui.End();
+
         }
 
         if (!open)
@@ -241,23 +298,34 @@ public static class LibrariesWindow
             SteamTransport.WorkshopType.ICCode
         );
 
-        var libs = new List<InstructionData>();
+        _fileStates = FossilVCS.GetFileStates();
+
+        var libs = new List<VersionedLibrary>();
         var titles = new HashSet<string>();
 
         foreach (var item in items)
         {
-            var data = InstructionData.GetFromFile(item.FilePathFullName);
-            data.ItemWrapper = item;
-            libs.Add(data);
-            titles.Add(data.Title);
+            try
+            {
+                var data = InstructionData.GetFromFile(item.FilePathFullName);
+                data.ItemWrapper = item;
+                var title = data.Title;
+                var newLib = new VersionedLibrary(data);
+                newLib.UpdateFileState(_fileStates);
+                libs.Add(newLib);
+                titles.Add(data.Title);
+            }
+            catch
+            {
+                L.Warning($"Failed to load library: {item.FilePathFullName}");
+            }
         }
 
         await UniTask.SwitchToMainThread();
         _libraryCodes = libs;
         _libraryTitles = titles;
 
-        if (IsOpen)
-            Search(_librarySearchText);
+        Search();
     }
 
     public static void Open()
@@ -267,43 +335,110 @@ public static class LibrariesWindow
 
         ImGui.OpenPopup("Library Search");
 
-        LoadLibraries().Forget();
+        if (_libraryCodes.Count == 0)
+            LoadLibraries().Forget();
     }
 
-    static Editor _previewEditor = null;
+    public static Editor _previewEditor = null;
     static ConfirmWindow _confirmDeleteLibWindow = null;
 
-    private static void Search(string query)
+    private static void Search()
     {
         _librarySearchResults.Clear();
 
-        var q = query.Trim().ToLowerInvariant();
+        var q = _librarySearchText.Trim().ToLowerInvariant();
 
         foreach (var lib in _libraryCodes)
         {
+            if (lib.Data.WorkshopFileHandle != 0 && !_showWorkshopItems)
+                continue;
+            if (lib.Data.WorkshopFileHandle == 0 && !_showLocalItems)
+                continue;
+            if (lib.State == FileState.Untracked && !_showUntracked)
+                continue;
+            if (lib.State == FileState.Modified && !_showModified)
+                continue;
+            if (lib.State == FileState.Unchanged && !_showUnchanged)
+                continue;
             if (
                 string.IsNullOrEmpty(q)
-                || lib.Title.ToLowerInvariant().Contains(q)
-                || lib.Instructions.ToLowerInvariant().Contains(q)
+                || lib.Data.Title.ToLowerInvariant().Contains(q)
+                || (_searchWholeText && lib.Data.Instructions.ToLowerInvariant().Contains(q))
             )
             {
                 _librarySearchResults.Add(lib);
             }
         }
+        UpdateTree();
     }
 
-    private static void LoadLibraryEntry(InstructionData lib)
+    private static void UpdateTree()
+    {
+        var nodes = new Dictionary<string, LibNode>();
+        var newNodes = new List<LibNode>();
+        foreach (var lib in _librarySearchResults)
+        {
+            var path = lib.Data.Title.Split(_dirSeparator);
+            LibNode current = null;
+            var prefix = "";
+            foreach (var part in path)
+            {
+                var newPrefix = prefix;
+                if (prefix != "")
+                    newPrefix += _dirSeparator;
+                newPrefix += part;
+                if (!nodes.TryGetValue(newPrefix, out var node))
+                {
+                    node = new LibNode { Name = part, Prefix = prefix };
+                    nodes[newPrefix] = node;
+                    if (current == null)
+                        newNodes.Add(node);
+                    else
+                        current.Children.Add(node);
+                }
+                current = node;
+                prefix = newPrefix;
+            }
+            current.Library = lib;
+        }
+
+        OuterNodes.Clear();
+        foreach (var node in newNodes)
+            if (node.Children.Count > 0)
+                OuterNodes.Add(node);
+        foreach (var node in newNodes)
+            if (node.Children.Count == 0)
+                OuterNodes.Add(node);
+    }
+
+    public static void LoadLibraryEntry(VersionedLibrary lib)
     {
         if (lib == null)
             return;
 
-        var numTabsBefore = Window.Tabs.Count;
+        var tabs = Window.Tabs;
+
+        foreach (var tab in tabs)
+        {
+            if (tab.Library == null)
+                continue;
+            if (tab.Library.DirectoryPath.FullName == lib.Data.DirectoryPath.FullName)
+            {
+                L.Info($"Library {lib.Data.Title} already open, switching to tab");
+                Window.SetTab(tabs.IndexOf(tab));
+                tab.Editors[0].ResetCode(lib.Data.Instructions);
+                _open = false;
+                return;
+            }
+        }
+
+        var numTabsBefore = tabs.Count;
 
         try
         {
             var editor = new Editor(Window.ActiveEditor.KeyHandler, lib);
-            editor.ResetCode(lib.Instructions);
-            Window.Tabs.Add(new EditorTab(Window, editor, lib));
+            editor.ResetCode(lib.Data.Instructions);
+            Window.Tabs.Add(new EditorTab(Window, editor, lib.Data));
             Window.SetTab(Window.Tabs.Count - 1);
             _open = false;
         }
@@ -312,6 +447,116 @@ public static class LibrariesWindow
             L.Error($"Failed to load library: {e}");
             while (Window.Tabs.Count > numTabsBefore)
                 Window.CloseTab(Window.Tabs.Count - 1);
+        }
+    }
+
+    public static void DrawLibrarySearchResults()
+    {
+        using var _ = new ScopedStyleVar(ImGuiStyleVar.WindowBorderSize, 0);
+        using var pane = new Pane("LibrarySearchResults", 0.35f);
+
+        if (_librarySearchResults.Count == 0)
+        {
+            ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1), "No results found.");
+            return;
+        }
+
+        foreach (var node in OuterNodes)
+            node.Draw(_flatView);
+
+    }
+
+    public static void DrawSelectedLibrary()
+    {
+
+        using var pane = new Pane("LibrarySearchPreview");
+
+        if (Selected != null)
+        {
+            var width = ImGui.GetContentRegionAvail().x;
+            var lib = Selected;
+            var buttonPos = ImGui.GetCursorPos() + new Vector2(width - 4 * buttonSize.x - 3 * ImGui.GetStyle().ItemSpacing.x, 0);
+            Text($"Author: {lib.Data.Author}");
+            var date = DateTime.FromFileTimeUtc(lib.Data.DateTime);
+            Text($"Date:   {date.ToLocalTime()}");
+            Text($"Path:   {lib.Data.DirectoryPath.Name}");
+            // ImGui.SameLine();
+            Text($"Title: ", width / 2);
+            ImGui.SameLine();
+
+            InputText("##title", ref lib.Data.Title, width / 2);
+            ImGui.SameLine();
+
+
+            ImGui.SetCursorPosX(width - buttonSize.x + ImGui.GetStyle().ItemSpacing.x);
+            if (Button("Save", buttonSize, "Save title/description"))
+            {
+                lib.Data.SaveToFile(lib.Data.DirectoryPath);
+                LoadLibraries().Forget();
+                // Search();
+            }
+
+            var pos = ImGui.GetCursorPos();
+            ImGui.SetCursorPos(buttonPos);
+            if (Button("Publish", buttonSize, "Publish the library to the workshop"))
+                lib.Data.PublishToWorkshop().Forget();
+            ImGui.SameLine();
+            if (Button("Delete", buttonSize, "Delete the library"))
+            {
+                _confirmDeleteLibWindow = new ConfirmWindow($"Delete {lib.Data.Title}",
+                    $"Are you sure?"
+                );
+                _confirmDeleteLibWindow.OnConfirm = () =>
+                {
+                    InputSourceCode.DeleteInstruction(lib.Data.DirectoryPath.Name);
+                    LoadLibraries().Forget();
+                    Selected = null;
+                    _previewEditor = null;
+                    _confirmDeleteLibWindow = null;
+                };
+            }
+
+            if (_confirmDeleteLibWindow != null)
+            {
+                if (!_confirmDeleteLibWindow.IsOpen)
+                    _confirmDeleteLibWindow = null;
+                else
+                    _confirmDeleteLibWindow.Draw();
+            }
+
+            ImGui.SameLine();
+            if (Button("Copy", buttonSize, "Copy code to clipboard"))
+                GameManager.Clipboard = lib.Data.Instructions;
+
+            ImGui.SameLine();
+            if (Button("Load", buttonSize, "Load this library into the editor"))
+                LoadLibraryEntry(lib);
+
+            ImGui.SetCursorPos(pos);
+
+            // ImGui.SetCursorPosX(width - buttonSize.x + ImGui.GetStyle().ItemSpacing.x);
+            if (ImGui.InputTextMultiline(
+                "LibraryDescriptionEdit",
+                ref lib.Data.Description,
+                1024,
+                new Vector2(width, 60)
+            ))
+            {
+                L.Info($"Description updated for library {lib.Data.Title}");
+                lib.Save();
+            }
+
+            if (ImGui.IsItemHovered() && string.IsNullOrEmpty(lib.Data.Description))
+                ImGui.SetTooltip("Description");
+
+            ImGui.Separator();
+            _previewEditor.Update();
+            using var _cbs = new ScopedStyleVar(ImGuiStyleVar.ChildBorderSize, 0);
+            _previewEditor.Draw(
+                ImGui.GetCursorScreenPos(),
+                ImGui.GetContentRegionAvail(),
+                "##LibraryPreviewEditor"
+            );
         }
     }
 }

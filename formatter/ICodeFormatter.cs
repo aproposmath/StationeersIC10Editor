@@ -145,9 +145,9 @@ public abstract class ICodeFormatter
                 a = (byte)(rgb & 0xFF);
                 rgb = rgb >> 8;
             }
-            byte r = (byte)((rgb >> 16) & 0xFF);
-            byte g = (byte)((rgb >> 8) & 0xFF);
-            byte b = (byte)(rgb & 0xFF);
+            var r = (byte)((rgb >> 16) & 0xFF);
+            var g = (byte)((rgb >> 8) & 0xFF);
+            var b = (byte)(rgb & 0xFF);
             return ((uint)a << 24) | ((uint)b << 16) | ((uint)g << 8) | r;
         }
         return ColorDefault;

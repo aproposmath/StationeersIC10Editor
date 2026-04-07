@@ -1,3 +1,4 @@
+// todo: ocnfirom window capure keyinput
 namespace StationeersIC10Editor;
 
 using System;
@@ -26,20 +27,24 @@ using static Utils;
 
 public class ConfirmWindow
 {
+    public string Title;
     public string Message;
     public bool IsOpen = true;
     public string InputPrompt = null;
     public string UserInput = "";
 
     public Action OnConfirm = delegate { };
+    private bool _justOpened = true;
 
-    public ConfirmWindow(string message, string inputPrompt = null)
+    public ConfirmWindow(string title, string message, string inputPrompt = null)
     {
-        ImGui.OpenPopup("Confirm");
+        Title = title;
+        ImGui.OpenPopup(title);
         Message = message;
         IsOpen = true;
         InputPrompt = inputPrompt;
         UserInput = "";
+        _justOpened = true;
     }
 
     public void Close()
@@ -60,18 +65,21 @@ public class ConfirmWindow
         var open = true;
         if (
             ImGui.BeginPopupModal(
-                "Confirm",
+                Title,
                 ref open,
                 ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.AlwaysAutoResize
             )
         )
         {
             using (new ScopedStyleColor(ImGuiCol.Text, ICodeFormatter.ColorWarning))
-                ImGui.Text(Message);
+                if (!string.IsNullOrEmpty(Message))
+                    ImGui.Text(Message);
             if (string.IsNullOrEmpty(InputPrompt) == false)
             {
                 ImGui.Text(InputPrompt);
                 ImGui.SameLine();
+                if (_justOpened)
+                    ImGui.SetKeyboardFocusHere(0);
                 ImGui.InputText("##user_input", ref UserInput, 256, ImGuiInputTextFlags.EnterReturnsTrue);
             }
             ImGui.Text("Press Escape to cancel, Enter to confirm.");
@@ -91,7 +99,7 @@ public class ConfirmWindow
 
             ImGui.SetCursorPos(new Vector2(pos.x + space, pos.y));
 
-            if (ImGui.Button("Confirm", Scale * new Vector2(100, 0)))
+            if (ImGui.Button("OK", Scale * new Vector2(100, 0)))
                 Confirm();
 
             if (ImGui.IsKeyPressed(ImGuiKey.Escape))
@@ -101,6 +109,7 @@ public class ConfirmWindow
                 Confirm();
             ImGui.EndPopup();
         }
+        _justOpened = false;
     }
 }
 
@@ -175,6 +184,7 @@ public static class Settings
     public static float CharWidth => _charWidth;
     public static float LineHeight => _lineHeight;
     public static float LineSpacing => _lineSpacing;
+    public static float LineHeightWithSpacing => _lineHeight + _lineSpacing;
 
     public static void UpdateTextSize()
     {
@@ -204,7 +214,7 @@ public class Editor
 {
     public object Target;
     public ProgrammableChipMotherboard PCM => Target as ProgrammableChipMotherboard;
-    public InstructionData InstructionData => Target as InstructionData;
+    public VersionedLibrary Library => Target as VersionedLibrary;
     bool IsMotherboard => PCM != null;
     public bool EnforceLineLengthLimit => Settings.EnforceLineLengthLimit && IsMotherboard;
     public bool EnforceLineLimit => Settings.EnforceLineLimit && IsMotherboard;
@@ -242,8 +252,8 @@ public class Editor
         {
             if (IsMotherboard)
                 return $"motherboard_id_{PCM.ReferenceId}";
-            else if (InstructionData != null)
-                return InstructionData.Title.Trim().Replace(' ', '_').Replace('/', '_');
+            else if (Library != null)
+                return Library.Data.Title.Trim().Replace(' ', '_').Replace('/', '_');
             else
                 return "Untitled";
         }
@@ -1040,32 +1050,38 @@ public class Editor
             PCM.InputFinished(code);
             return "Saved to Motherboard";
         }
-        if (InstructionData != null)
+        if (Library != null)
         {
-            var title = $"Are you sure to overwrite the code in Library '{InstructionData.Title}'?";
+            if (Library.Data.Instructions == Code)
+                return "No changes to " + (doCommit ? "commit" : "save");
+            Library.Data.Instructions = Code;
+            Library.Data.SaveToFile(Library.Data.DirectoryPath);
+            if (Library.State == FileState.Unchanged)
+                Library.State = FileState.Modified;
+            var msg = $"Library '{Library.Data.Title}' saved.";
             if (doCommit)
-                title = $"Save and Commit '{InstructionData.Title}'";
-            _confirmWindow = new ConfirmWindow(title, doCommit ? "Commit Message" : null);
-            _confirmWindow.OnConfirm = () =>
             {
-                InstructionData.Instructions = Code;
-                InstructionData.SaveToFile(InstructionData.DirectoryPath);
-                var msg = $"Library '{InstructionData.Title}' saved";
-                if (doCommit)
+                _confirmWindow = new ConfirmWindow($"Commit {Library.Data.Title}", null, "Message");
+                _confirmWindow.OnConfirm = () =>
                 {
                     try
                     {
-                        FossilVCS.AddAndCommit(InstructionData.DirectoryPath.Name, _confirmWindow.UserInput);
+                        FossilVCS.AddAndCommit(Library.Data.DirectoryPath.Name, _confirmWindow.UserInput);
+                        Library.State = FileState.Unchanged;
                         msg = $"Version saved: {_confirmWindow.UserInput}";
+                        LibrariesWindow.LoadLibraries().Forget();
                     }
                     catch (Exception ex)
                     {
                         msg = $"Failed to commit: {ex.Message}";
+                        L.Error(ex.Message);
+                        L.Error(ex.StackTrace);
                     }
-                }
-                KeyHandler.CommandStatus = msg;
-            };
-            return "";
+                };
+            }
+            // else
+            //     LibrariesWindow.LoadLibraries().Forget();
+            return msg;
         }
         return "Error: No target to save to.";
     }
@@ -1101,26 +1117,24 @@ public class Editor
                 1.5f
             );
 
-        ImGuiListClipperPtr clipper = new ImGuiListClipperPtr(
+        var clipper = new ImGuiListClipperPtr(
             ImGuiNative.ImGuiListClipper_ImGuiListClipper()
             );
 
         clipper.Begin(Lines.Count);
 
-        Vector2 mousePos = ImGui.GetMousePos();
-
         if (ScrollToCaret > 0)
         {
-            float lineHeight = LineHeight;
-            float lineSpacing = ImGui.GetStyle().ItemSpacing.y;
+            var lineHeight = LineHeight;
+            var lineSpacing = ImGui.GetStyle().ItemSpacing.y;
 
-            float pageHeight = (Lines.Count * lineHeight) - ImGui.GetScrollMaxY();
-            float scrollY = ImGui.GetScrollY();
-            float viewTop = _scrollY;
-            float viewBottom = _scrollY + pageHeight;
+            var pageHeight = (Lines.Count * lineHeight) - ImGui.GetScrollMaxY();
+            var scrollY = ImGui.GetScrollY();
+            var viewTop = _scrollY;
+            var viewBottom = _scrollY + pageHeight;
 
-            float caretTop = CaretLine * lineHeight;
-            float caretBottom = caretTop + lineHeight;
+            var caretTop = CaretLine * lineHeight;
+            var caretBottom = caretTop + lineHeight;
 
             if (caretTop < viewTop)
             {
@@ -1143,7 +1157,7 @@ public class Editor
 
         while (clipper.Step())
         {
-            for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
+            for (var i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
             {
                 var ppos = ImGui.GetCursorScreenPos();
                 CodeFormatter.DrawLine(i, selection);
@@ -1196,8 +1210,7 @@ public class Editor
 
         if (KeyHandler.Mode == KeyMode.Insert)
         {
-            bool blinkOn = ((int)((ImGui.GetTime() - TimeLastAction) * 2) % 2) == 0;
-            if (blinkOn)
+            if (((int)((ImGui.GetTime() - TimeLastAction) * 2) % 2) == 0)
             {
                 drawList.AddLine(
                     pos,
@@ -1387,26 +1400,25 @@ public class EditorWindow
         HideWindow();
     }
 
-    public void Export(bool directlyToChip = false)
+    public void Export()
     {
-        if (!IsMotherboard)
+        if (LimitExceeded)
         {
-            // Apply code to motherboard tab
-            MotherboardTab[0].ResetCode(ActiveEditor.Code);
-            if (!directlyToChip)
-                _activeTabIndex = 0;
+            ActiveTab[0].CommandStatus = LimitExceededMessage;
+            return;
         }
 
-        if (IsMotherboard || directlyToChip)
+        if (IsMotherboard)
         {
-            if (LimitExceeded)
-            {
-                ActiveTab[0].CommandStatus = LimitExceededMessage;
-                return;
-            }
             Confirm();
             MotherboardTab[0].PCM.Export();
+            return;
         }
+
+        ActiveTab.Save();
+        MotherboardTab[0].ResetCode(ActiveEditor.Code);
+        MotherboardTab.Save();
+        HideWindow();
     }
 
     public void HideWindow()
@@ -1650,12 +1662,7 @@ public class EditorWindow
 
         ImGui.SameLine();
 
-        var label = IsMotherboard ? "Export" : "To MB";
-        var tooltip = IsMotherboard
-            ? "Close the editor and export the code to IC10 Chip."
-            : "Apply code to the Motherboard tab";
-
-        if (Button(label, buttonSize, tooltip, LimitExceeded))
+        if (Button("Export", buttonSize, "Export to IC10 chip and close editor (Ctrl+E)", LimitExceeded))
             Export();
 
         ImGui.SameLine();
@@ -1677,7 +1684,8 @@ public class EditorWindow
     private bool _didGameWindowOpen = false;
     private bool _didGameWindowClose = false;
 
-    public bool HasFocus => _hasFocus && !LibrariesWindow.IsOpen && !(ActiveEditor._confirmWindow?.IsOpen ?? false) && !(ActiveTab.VersionWindow?.IsOpen ?? false);
+    // public bool HasFocus => _hasFocus && !LibrariesWindow.IsOpen && !(ActiveEditor._confirmWindow?.IsOpen ?? false) && !(ActiveTab.VersionWindow?.IsOpen ?? false);
+    public bool HasFocus => _hasFocus && !(ActiveEditor._confirmWindow?.IsOpen ?? false);
 
     public void CalcDidGameWindowOpen()
     {
@@ -1740,7 +1748,7 @@ public class EditorWindow
                 ImGui.SetNextWindowCollapsed(false);
         }
 
-        ImGui.Begin(Title + "###IC10EditorWindow", ImGuiWindowFlags.NoSavedSettings);
+        ImGui.Begin(Title);
         ImGui.GetStyle().Colors[(int)ImGuiCol.Tab] = new Vector4(0.2f, 0.2f, 0.2f, 1.0f);
 
         ImGui.SetWindowFontScale(Scale);
@@ -1779,7 +1787,10 @@ public class EditorWindow
         ImGui.EndTabBar();
 
         DrawFooter();
-        LibrariesWindow.Draw();
+
+        if (HasFocus)
+            foreach (var editor in ActiveTab.Editors)
+                editor.DrawTooltip();
 
         if (ActiveTab[0]._confirmWindow != null)
             ActiveTab[0]._confirmWindow.Draw();
@@ -1787,9 +1798,7 @@ public class EditorWindow
         ImGui.End();
         ImGui.PopStyleColor();
 
-        if (HasFocus)
-            foreach (var editor in ActiveTab.Editors)
-                editor.DrawTooltip();
+        LibrariesWindow.Draw();
 
         DrawHelpWindow();
         DrawDebugWindow();

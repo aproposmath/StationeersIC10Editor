@@ -11,6 +11,8 @@ using System.Xml.Serialization;
 
 using Assets.Scripts.UI;
 
+using Cysharp.Threading.Tasks;
+
 using ImGuiNET;
 
 using UnityEngine;
@@ -47,9 +49,43 @@ public class FossilVCS
         }
     }
 
+    public static async UniTask<string> RunAsync(string args)
+    {
+        L.Debug($"Running Fossil command: \"{args}\" at \"{ScriptsDir}\"");
+        var sw = Stopwatch.StartNew();
+        var psi = new ProcessStartInfo
+        {
+            FileName = FossilExe,
+            Arguments = args,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WorkingDirectory = ScriptsDir,
+        };
+        psi.EnvironmentVariables["FOSSIL_HOME"] = Path.Combine(CacheDir);
+
+        await UniTask.SwitchToThreadPool();
+
+        // Hack: this is not async, it's still blocking a (non-main)thread
+        using var process = Process.Start(psi);
+        process.WaitForExit();
+
+        if (process.ExitCode != 0)
+        {
+            L.Info($"Error while running Fossil command: {args}");
+            L.Info("\t" + process.StandardOutput.ReadToEnd());
+            var stdErr = process.StandardError.ReadToEnd();
+            L.Info("\t" + stdErr);
+            throw new Exception(stdErr);
+        }
+        L.Debug($"\tcommand |{args}| took " + sw.ElapsedMilliseconds + "ms");
+        return process.StandardOutput.ReadToEnd();
+    }
+
     public static string Run(string args)
     {
-        L.Debug($"Running Fossil command: {args}");
+        L.Debug($"Running Fossil command: \"{args}\" at \"{ScriptsDir}\"");
         var psi = new ProcessStartInfo
         {
             FileName = FossilExe,
@@ -103,16 +139,39 @@ public class FossilVCS
             message = $"Update {path}";
         message = message.Replace("\"", "'");
         Run($"add \"{path}\"");
-        try
+        Run($"commit --no-warnings -m \"{message}\"");
+    }
+
+    public static async UniTask<FileState> GetFileState(string path)
+    {
+        if ((await RunAsync("extra")).Contains(path))
+            return FileState.Untracked;
+        var diff = await RunAsync("ls -v");
+        L.Debug($"diff: {diff}");
+        if (diff.Contains("UNCHANGED  " + path))
         {
-            Run($"commit --no-warnings -m \"{message}\"");
+            L.Debug($"File {path} is unchanged");
+            return FileState.Unchanged;
         }
-        catch (Exception ex)
+        return FileState.Modified;
+    }
+
+    public static Dictionary<string, FileState> GetFileStates()
+    {
+        var result = new Dictionary<string, FileState>();
+        static string GetName(string path) => path.Split('/')[0];
+        foreach (var path in Run("extra").Split('\n'))
+            result[GetName(path)] = FileState.Untracked;
+        foreach (var line in Run("ls -v").Split('\n'))
         {
-            if (ex.Message.Contains("allow-empty"))
-                throw new Exception("no changes to commit");
-            throw;
+            if (string.IsNullOrEmpty(line) || !line.EndsWith("instruction.xml"))
+                continue;
+            var state = line.Trim().StartsWith("EDITED ") ? FileState.Modified : FileState.Unchanged;
+            result[GetName(line.Substring(11))] = state;
+            L.Debug($"File state for {GetName(line.Substring(11))}: {state}");
+            L.Debug($"\tline: {line}");
         }
+        return result;
     }
 
     public static List<FileVersion> Log(string path)
@@ -200,6 +259,13 @@ public class FossilVCS
         return BitConverter.ToString(hash).Replace("-", "").ToLower();
     }
 
+}
+
+public enum FileState
+{
+    Untracked,
+    Unchanged,
+    Modified,
 }
 
 public class FileVersion
@@ -315,6 +381,10 @@ public class FileHistoryWindow
                 IsOpen = false;
             }
         }
+
+        if (ImGui.IsKeyDown(ImGuiKey.Escape))
+            Close();
+
         ImGui.End();
     }
 }

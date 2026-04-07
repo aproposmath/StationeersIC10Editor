@@ -602,7 +602,7 @@ public class KeyHandler
             Stationpedia.Instance.OpenPageByKey(page.Key);
     }
 
-    public void HandleMouse(bool ctrlDown, bool shiftDown)
+    public void HandleMouse(bool ctrlDown, bool shiftDown, bool altDown)
     {
         var mousePos = ImGui.GetMousePos();
         if (mousePos != _lastMousePos)
@@ -662,7 +662,7 @@ public class KeyHandler
 
     public bool _isClosing = false;
 
-    public void HandleCommon(bool ctrlDown, bool shiftDown)
+    public void HandleCommon(bool ctrlDown, bool shiftDown, bool altDown)
     {
         if (Input.GetKeyUp(KeyCode.Q) && _isClosing)
         {
@@ -671,68 +671,68 @@ public class KeyHandler
         }
         var io = ImGui.GetIO();
         var shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-        if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl))
+        if (ctrlDown && !altDown)
         {
-            // these combos are not captured by ImGui for some reason, so handle them via Unity Input
-            if (Input.GetKeyDown(KeyCode.H) && !Window.IsMotherboard)
-                Window.ActiveTab.VersionWindow.Open();
             if (Input.GetKeyDown(KeyCode.S))
                 CommandStatus = Editor.Save(shift);
-            if (Input.GetKeyDown(KeyCode.E))
-                Window.Export(shift);
-            if (Input.GetKeyDown(KeyCode.Q))
-                _isClosing = true;
-            if (Input.GetKeyDown(KeyCode.L))
-                LibrariesWindow.Open();
-            if (Input.GetKeyDown(KeyCode.W))
-                Window.CloseTab();
+            if (shiftDown)
+            {
+                if (Input.GetKeyDown(KeyCode.Space))
+                    Window.PreviousTab();
+            }
+            else
+            {
+                if (Input.GetKeyDown(KeyCode.E))
+                    Window.Export();
+                if (Input.GetKeyDown(KeyCode.Space))
+                    Window.NextTab();
+                if (Input.GetKeyDown(KeyCode.H) && !Window.IsMotherboard)
+                    Window.ActiveTab.VersionWindow.Open();
+                if (Input.GetKeyDown(KeyCode.Q))
+                    _isClosing = true;
+                if (Input.GetKeyDown(KeyCode.L))
+                    LibrariesWindow.Open();
+                if (Input.GetKeyDown(KeyCode.W))
+                    Window.CloseTab();
+                for (var i = 0; i <= 9; i++)
+                    if (Input.GetKeyDown(KeyCode.Alpha0 + i))
+                        Window.SetTab((i + 9) % 10);
 
-            for (int i = 0; i <= 9; i++)
-                if (Input.GetKeyDown(KeyCode.Alpha0 + i))
-                    Window.SetTab((i + 9) % 10);
-
-            if (shift && Input.GetKeyDown(KeyCode.Space))
-                Window.PreviousTab();
-            else if (!shift && Input.GetKeyDown(KeyCode.Space))
-                Window.NextTab();
-        }
-
-        if (ctrlDown)
-        {
-            if (ImGui.IsKeyPressed(ImGuiKey.V))
-            {
-                Editor.Paste();
-                OnKeyPressed("Ctrl+V - Paste");
-            }
-            if (ImGui.IsKeyPressed(ImGuiKey.A))
-            {
-                Editor.SelectAll();
-                OnKeyPressed("Ctrl+A - Select All");
-            }
-            if (ImGui.IsKeyPressed(ImGuiKey.C))
-            {
-                Editor.Copy();
-                OnKeyPressed("Ctrl+C - Copy");
-            }
-            if (ImGui.IsKeyPressed(ImGuiKey.X))
-            {
-                Editor.Cut();
-                OnKeyPressed("Ctrl+X - Cut");
-            }
-            if (ImGui.IsKeyPressed(ImGuiKey.Z))
-            {
-                Editor.Undo();
-                OnKeyPressed("Ctrl+Z - Undo");
-            }
-            if (ImGui.IsKeyPressed(ImGuiKey.Y))
-            {
-                Editor.Redo();
-                OnKeyPressed("Ctrl+Y - Redo");
+                if (ImGui.IsKeyPressed(ImGuiKey.V))
+                {
+                    Editor.Paste();
+                    OnKeyPressed("Ctrl+V - Paste");
+                }
+                if (ImGui.IsKeyPressed(ImGuiKey.A))
+                {
+                    Editor.SelectAll();
+                    OnKeyPressed("Ctrl+A - Select All");
+                }
+                if (ImGui.IsKeyPressed(ImGuiKey.C))
+                {
+                    Editor.Copy();
+                    OnKeyPressed("Ctrl+C - Copy");
+                }
+                if (ImGui.IsKeyPressed(ImGuiKey.X))
+                {
+                    Editor.Cut();
+                    OnKeyPressed("Ctrl+X - Cut");
+                }
+                if (ImGui.IsKeyPressed(ImGuiKey.Z))
+                {
+                    Editor.Undo();
+                    OnKeyPressed("Ctrl+Z - Undo");
+                }
+                if (ImGui.IsKeyPressed(ImGuiKey.Y))
+                {
+                    Editor.Redo();
+                    OnKeyPressed("Ctrl+Y - Redo");
+                }
             }
         }
 
         // check for move actions
-        TextPosition newPos = new TextPosition(-1, -1);
+        var newPos = new TextPosition(-1, -1);
 
         var arrowMoveToken = ctrlDown ? MoveToken.WordBeginning : MoveToken.Char;
 
@@ -917,7 +917,7 @@ public class KeyHandler
         }
     }
 
-    public void HandleVimNormalVisualMode(bool ctrlDown, bool shiftDown)
+    public void HandleVimNormalVisualMode(bool ctrlDown, bool shiftDown, bool altDown)
     {
         var io = ImGui.GetIO();
 
@@ -1064,17 +1064,18 @@ public class KeyHandler
         io.ConfigWindowsMoveFromTitleBarOnly = true;
         bool ctrlDown = io.KeyCtrl || Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
         bool shiftDown = io.KeyShift || Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+        bool altDown = io.KeyAlt || Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt) || Input.GetKey(KeyCode.AltGr);
 
-        HandleMouse(ctrlDown, shiftDown);
+        HandleMouse(ctrlDown, shiftDown, altDown);
 
         if (!hasFocus)
             return;
 
-        HandleCommon(ctrlDown, shiftDown);
+        HandleCommon(ctrlDown, shiftDown, altDown);
 
         if (Mode == KeyMode.Insert)
             HandleInsertMode();
         if (Mode == KeyMode.VimNormal || Mode == KeyMode.VimVisual)
-            HandleVimNormalVisualMode(ctrlDown, shiftDown);
+            HandleVimNormalVisualMode(ctrlDown, shiftDown, altDown);
     }
 }

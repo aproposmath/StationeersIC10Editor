@@ -132,10 +132,10 @@ public readonly struct ScopedItemFlag : IDisposable
 
 public readonly struct Pane : IDisposable
 {
-    public Pane(string name, float widthFraction = 1.0f, float footerSize = -1.0f, bool border = true)
+    public Pane(string name, float widthFraction = 1.0f, float footerSize = 0.0f, bool border = true)
     {
-        if (footerSize < 0.0f)
-            footerSize = ImGui.GetStyle().FramePadding.y * 2 + Settings.LineHeight;
+        if (footerSize < 0.0f) // skip -footerSize*lineHeight
+            footerSize = -footerSize * Settings.LineHeightWithSpacing;
         var avail = ImGui.GetContentRegionAvail();
         var width = avail.x * widthFraction - ImGui.GetStyle().FramePadding.x * 1;
         var height = avail.y - ImGui.GetStyle().FramePadding.y * 2 - footerSize;
@@ -150,6 +150,16 @@ public readonly struct Pane : IDisposable
 
 public class ImGuiUtils
 {
+    public static bool Checkbox(string label, ref bool value, string tooltip = null)
+    {
+        var pressed = ImGui.Checkbox(label, ref value);
+
+        if (!string.IsNullOrEmpty(tooltip) && ImGui.IsItemHovered() && Settings.ShowTooltip)
+            ImGui.SetTooltip(tooltip);
+
+        return pressed;
+    }
+
     public static bool Button(string label, Vector2 size = default, string tooltip = null, bool disabled = false)
     {
         // using var _df = new ScopedItemFlag(ImGuiItemFlags.Disabled, disabled, disabled);
@@ -160,6 +170,12 @@ public class ImGuiUtils
             ImGui.SetTooltip(tooltip);
 
         return pressed;
+    }
+
+    public static bool InputText(string id, ref string value, float width = -1.0f, uint bufferSize = 256)
+    {
+        using var _ = new ScopedItemWidth(width, width != -1.0f);
+        return ImGui.InputText(id, ref value, bufferSize, ImGuiInputTextFlags.EnterReturnsTrue);
     }
 
     public static bool InputFloat(string label, ref float value, float width = -1.0f)
