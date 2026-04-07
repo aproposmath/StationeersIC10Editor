@@ -38,9 +38,12 @@ public class VersionedLibrary
     public uint Color => Colors[State];
     public DateTime Date => DateTime.FromFileTimeUtc(Data.DateTime).ToLocalTime();
 
+    public bool IsWorkshop => State == FileState.Workshop;
+
     public void UpdateFileState(Dictionary<string, FileState> fileStates)
     {
-        if (Data.WorkshopFileHandle != 0)
+        // check if path is subdir of FossilVCS.ScriptDir
+        if (Data.DirectoryPath.Parent.FullName != FossilVCS.ScriptsDir)
         {
             State = FileState.Workshop;
             return;
@@ -367,9 +370,9 @@ public static class LibrariesWindow
 
         foreach (var lib in _libraryCodes)
         {
-            if (lib.Data.WorkshopFileHandle != 0 && !_showWorkshopItems)
+            if (lib.IsWorkshop && !_showWorkshopItems)
                 continue;
-            if (lib.Data.WorkshopFileHandle == 0 && !_showLocalItems)
+            if (!lib.IsWorkshop && !_showLocalItems)
                 continue;
             if (lib.State == FileState.Untracked && !_showUntracked)
                 continue;
@@ -428,17 +431,17 @@ public static class LibrariesWindow
                 OuterNodes.Add(node);
     }
 
-    public static void LoadLibraryEntry(VersionedLibrary lib)
+    public static int LoadLibraryEntry(VersionedLibrary lib)
     {
         if (lib == null)
-            return;
+            return -1;
 
         if (lib.State == FileState.Workshop)
         {
             Window.SetTab(0);
             Window.ActiveTab.Editors[0].ResetCode(lib.Data.Instructions);
             _open = false;
-            return;
+            return 0;
         }
 
         var tabs = Window.Tabs;
@@ -450,10 +453,11 @@ public static class LibrariesWindow
             if (tab.Library.DirectoryPath.FullName == lib.Data.DirectoryPath.FullName)
             {
                 L.Info($"Library {lib.Data.Title} already open, switching to tab");
-                Window.SetTab(tabs.IndexOf(tab));
+                var index = tabs.IndexOf(tab);
+                Window.SetTab(index);
                 tab.Editors[0].ResetCode(lib.Data.Instructions);
                 _open = false;
-                return;
+                return index;
             }
         }
 
@@ -466,6 +470,7 @@ public static class LibrariesWindow
             Window.Tabs.Add(new EditorTab(Window, editor, lib.Data));
             Window.SetTab(Window.Tabs.Count - 1);
             _open = false;
+            return Window.Tabs.Count - 1;
         }
         catch (Exception e)
         {
@@ -473,6 +478,7 @@ public static class LibrariesWindow
             while (Window.Tabs.Count > numTabsBefore)
                 Window.CloseTab(Window.Tabs.Count - 1);
         }
+        return -1;
     }
 
     public static void DrawLibrarySearchResults()

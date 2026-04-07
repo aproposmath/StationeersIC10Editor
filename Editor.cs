@@ -1073,8 +1073,7 @@ public class Editor
                 return "No changes to " + (doCommit ? "commit" : "save");
             Library.Data.Instructions = Code;
             Library.Data.SaveToFile(Library.Data.DirectoryPath);
-            if (Library.State == FileState.Unchanged)
-                Library.State = FileState.Modified;
+            LibrariesWindow.LoadLibraries().Forget();
             var msg = $"Library '{Library.Data.Title}' saved.";
             if (doCommit)
             {

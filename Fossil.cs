@@ -347,7 +347,7 @@ public class FileHistoryWindow
             ImGui.Begin($"Version History: {Library.Title}", ref IsOpen, ImGuiWindowFlags.NoSavedSettings)
         )
         {
-            using (new Pane("Versions", 0.4f))
+            using (new Pane("Versions", 0.4f, -1))
             {
                 foreach (var version in Versions)
                 {
@@ -366,7 +366,7 @@ public class FileHistoryWindow
 
             ImGui.SameLine();
 
-            using (new Pane("LibrarySearchPreview"))
+            using (new Pane("LibrarySearchPreview", 1.0f, -1))
             {
                 if (_previewEditor != null)
                 {
