@@ -58,6 +58,18 @@ public class VersionedLibrary
         State = await FossilVCS.GetFileState(Data.DirectoryPath.Name + "/instruction.xml");
         L.Debug($"File state for library {Data.DirectoryPath.Name}: {State}");
     }
+    public async UniTask Publish()
+    {
+        try
+        {
+            await Data.PublishToWorkshop();
+        }
+        finally
+        {
+            await LibrariesWindow.LoadLibraries();
+        }
+    }
+
 }
 
 public class LibNode
@@ -67,12 +79,12 @@ public class LibNode
     public VersionedLibrary Library = null;
     public string Prefix = "";
 
-    public void Draw(bool flat = false)
+    public void Draw(bool tree = true)
     {
         if (Library != null)
         {
             var title = Library.Data.Title;
-            if (!flat && Prefix.Length > 0)
+            if (tree && Prefix.Length > 0)
                 title = title.Substring(Prefix.Length + 1);
             if (Library.Data.WorkshopFileHandle != 0)
                 title += " by " + Library.Data.Author;
@@ -106,10 +118,10 @@ public class LibNode
                 return;
         }
 
-        if (flat)
+        if (!tree)
         {
             foreach (var child in Children)
-                child.Draw(flat);
+                child.Draw(tree);
             return;
         }
 
@@ -150,7 +162,7 @@ public static class LibrariesWindow
     private static bool _showUnchanged = true;
     private static char _dirSeparator = '|';
 
-    private static bool _flatView = false;
+    private static bool _treeView = true;
 
     private static ConfirmWindow _newLibWindow = null;
 
@@ -231,12 +243,11 @@ public static class LibrariesWindow
 
             ImGui.SameLine();
 
-            ImGui.Checkbox("Flat", ref _flatView);
+            Checkbox("TreeView", ref _treeView, "Show libraries in tree view\nuse '|' in title to separate folder names");
 
             ImGui.SameLine();
             ImGui.SetCursorPosX(width - buttonSize.x - 0 * ImGui.GetStyle().ItemSpacing.x);
-            if (Button("New", buttonSize, "Create new library from current Motherboard code (Ctrl+N)") ||
-                ((ImGui.IsKeyPressed(ImGuiKey.LeftCtrl) || ImGui.IsKeyPressed(ImGuiKey.RightCtrl)) && ImGui.IsKeyPressed(ImGuiKey.N)))
+            if (Button("New", buttonSize, "Create new library from current Motherboard code"))
             {
                 _newLibWindow = new ConfirmWindow($"Create new library", null, "Title:");
                 _newLibWindow.OnConfirm = () =>
@@ -248,36 +259,10 @@ public static class LibrariesWindow
                 };
             }
 
-
-
-            // ImGui.SameLine();
-            // ImGui.Text("  Separator");
-            // ImGui.SameLine();
-
-            // string sep = _dirSeparator.ToString();
-            // if (InputText(
-            //     "##DirSeparator",
-            //     ref sep,
-            //     3 * CharWidth
-            // ))
-            // {
-            //     if (sep.Length >= 1)
-            //         _dirSeparator = sep[0];
-            //     else
-            //         _dirSeparator = '|';
-            //     Search();
-            // }
-
-
-            // ImGui.Separator();
-
             DrawLibrarySearchResults();
             ImGui.SameLine();
             DrawSelectedLibrary();
 
-            // ImGui.Separator();
-            // if (ImGui.Button("Close"))
-            //     _open = false;
             if (ImGui.IsKeyPressed(ImGuiKey.Escape))
                 _open = false;
 
@@ -294,11 +279,15 @@ public static class LibrariesWindow
 
     public static async UniTask LoadLibraries()
     {
+        await UniTask.SwitchToThreadPool();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         var items = await NetworkManager.GetLocalAndWorkshopItems(
             SteamTransport.WorkshopType.ICCode
         );
+        L.Debug($"\tGet {sw.ElapsedMilliseconds}ms");
 
-        _fileStates = FossilVCS.GetFileStates();
+        _fileStates = await FossilVCS.GetFileStates();
+        L.Debug($"\tFileStates {sw.ElapsedMilliseconds}ms");
 
         var libs = new List<VersionedLibrary>();
         var titles = new HashSet<string>();
@@ -309,7 +298,6 @@ public static class LibrariesWindow
             {
                 var data = InstructionData.GetFromFile(item.FilePathFullName);
                 data.ItemWrapper = item;
-                var title = data.Title;
                 var newLib = new VersionedLibrary(data);
                 newLib.UpdateFileState(_fileStates);
                 libs.Add(newLib);
@@ -320,12 +308,16 @@ public static class LibrariesWindow
                 L.Warning($"Failed to load library: {item.FilePathFullName}");
             }
         }
+        L.Debug($"\tBuild {sw.ElapsedMilliseconds}ms");
+        libs.Sort((a, b) => a.Data.Title.ToLowerInvariant().CompareTo(b.Data.Title.ToLowerInvariant()));
 
+        L.Debug($"\tLoaded {sw.ElapsedMilliseconds}ms");
         await UniTask.SwitchToMainThread();
         _libraryCodes = libs;
         _libraryTitles = titles;
 
         Search();
+        L.Debug($"\tSearched {sw.ElapsedMilliseconds}ms");
     }
 
     public static void Open()
@@ -462,7 +454,7 @@ public static class LibrariesWindow
         }
 
         foreach (var node in OuterNodes)
-            node.Draw(_flatView);
+            node.Draw(_treeView);
 
     }
 
@@ -499,7 +491,7 @@ public static class LibrariesWindow
             var pos = ImGui.GetCursorPos();
             ImGui.SetCursorPos(buttonPos);
             if (Button("Publish", buttonSize, "Publish the library to the workshop"))
-                lib.Data.PublishToWorkshop().Forget();
+                lib.Publish().Forget();
             ImGui.SameLine();
             if (Button("Delete", buttonSize, "Delete the library"))
             {
@@ -534,22 +526,11 @@ public static class LibrariesWindow
 
             ImGui.SetCursorPos(pos);
 
-            // ImGui.SetCursorPosX(width - buttonSize.x + ImGui.GetStyle().ItemSpacing.x);
-            if (ImGui.InputTextMultiline(
-                "LibraryDescriptionEdit",
-                ref lib.Data.Description,
-                1024,
-                new Vector2(width, 60)
-            ))
-            {
-                L.Info($"Description updated for library {lib.Data.Title}");
-                lib.Save();
-            }
+            ImGui.InputTextMultiline("LibraryDescriptionEdit", ref lib.Data.Description, 1024, new Vector2(width, 60));
 
             if (ImGui.IsItemHovered() && string.IsNullOrEmpty(lib.Data.Description))
                 ImGui.SetTooltip("Description");
 
-            ImGui.Separator();
             _previewEditor.Update();
             using var _cbs = new ScopedStyleVar(ImGuiStyleVar.ChildBorderSize, 0);
             _previewEditor.Draw(

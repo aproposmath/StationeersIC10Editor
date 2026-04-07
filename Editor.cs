@@ -1052,7 +1052,10 @@ public class Editor
         }
         if (Library != null)
         {
-            if (Library.Data.Instructions == Code)
+            var noChanges = Library.Data.Instructions == Code;
+            if (doCommit)
+                noChanges = noChanges && Library.State != FileState.Untracked;
+            if (noChanges)
                 return "No changes to " + (doCommit ? "commit" : "save");
             Library.Data.Instructions = Code;
             Library.Data.SaveToFile(Library.Data.DirectoryPath);
@@ -1079,8 +1082,6 @@ public class Editor
                     }
                 };
             }
-            // else
-            //     LibrariesWindow.LoadLibraries().Forget();
             return msg;
         }
         return "Error: No target to save to.";
@@ -1363,18 +1364,6 @@ public class EditorWindow
 
     private bool Show = false;
 
-
-    public async UniTask PublishLibrary(InstructionData data)
-    {
-        try
-        {
-            await data.PublishToWorkshop();
-        }
-        finally
-        {
-            await LibrariesWindow.LoadLibraries();
-        }
-    }
 
     public void SwitchToNativeEditor()
     {

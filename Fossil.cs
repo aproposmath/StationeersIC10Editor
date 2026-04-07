@@ -112,9 +112,10 @@ public class FossilVCS
     }
 
 
-    public static void Init()
+    public static async UniTaskVoid Init()
     {
         L.Debug($"Initializing Fossil repository at {RepoFilePath}");
+        await UniTask.SwitchToThreadPool();
         EnsureInstalled();
 
         var repoName = Path.GetFileName(RepoFilePath);
@@ -124,7 +125,11 @@ public class FossilVCS
 
         try
         {
-            Run($"open -k {repoName}");
+            if (Run("status -b").Trim() == "none")
+                Run($"open -k {repoName}");
+
+            if (Run("status -b").Trim() == "none")
+                throw new Exception("Failed to open Fossil repository");
         }
         catch (Exception ex)
         {
@@ -156,13 +161,21 @@ public class FossilVCS
         return FileState.Modified;
     }
 
-    public static Dictionary<string, FileState> GetFileStates()
+    public static async UniTask<Dictionary<string, FileState>> GetFileStates()
     {
         var result = new Dictionary<string, FileState>();
         static string GetName(string path) => path.Split('/')[0];
-        foreach (var path in Run("extra").Split('\n'))
+
+        var extraPromise = RunAsync("extra");
+        var lsPromise = RunAsync("ls -v");
+
+        // await all
+        var extra = await extraPromise;
+        var ls = await lsPromise;
+
+        foreach (var path in extra.Split('\n'))
             result[GetName(path)] = FileState.Untracked;
-        foreach (var line in Run("ls -v").Split('\n'))
+        foreach (var line in ls.Split('\n'))
         {
             if (string.IsNullOrEmpty(line) || !line.EndsWith("instruction.xml"))
                 continue;
@@ -330,7 +343,7 @@ public class FileHistoryWindow
         using var _ = new ScopedStyleVar(ImGuiStyleVar.FrameRounding, 2.0f);
         ImGui.SetNextWindowSize(new Vector2(1300, 800), ImGuiCond.FirstUseEver);
         if (
-            ImGui.Begin($"Version History: {Library.Title}", ref IsOpen)
+            ImGui.Begin($"Version History: {Library.Title}", ref IsOpen, ImGuiWindowFlags.NoSavedSettings)
         )
         {
             using (new Pane("Versions", 0.4f))
