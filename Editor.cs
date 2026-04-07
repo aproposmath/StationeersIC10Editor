@@ -1481,6 +1481,9 @@ public class EditorWindow
     private bool _helpWindowVisible = false;
     private bool _debugWindowVisible = false;
 
+    public bool HasFileVCS => !IsMotherboard && ActiveTab[0].Library.State != FileState.Workshop;
+    public bool IsFileReadonly => !IsMotherboard && ActiveTab[0].Library.State == FileState.Workshop;
+
     public void DrawHeader()
     {
         if (Button($"Library", buttonSize, "Load File from Library (Ctrl+L)"))
@@ -1515,7 +1518,7 @@ public class EditorWindow
 
         ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 2 * ImGui.GetStyle().ItemSpacing.x);
 
-        if (Button("History", buttonSize, "Version History (Ctrl+H)", IsMotherboard))
+        if (Button("History", buttonSize, "Version History (Ctrl+H)", !HasFileVCS))
             ActiveTab.VersionWindow.Open();
 
         ImGui.SameLine();
@@ -1660,7 +1663,7 @@ public class EditorWindow
 
         ImGui.SameLine();
 
-        if (Button("Commit", buttonSize, "Add version to History (Ctrl+Shift+S)", IsMotherboard))
+        if (Button("Commit", buttonSize, "Add version to History (Ctrl+Shift+S)", !HasFileVCS))
             ActiveTab[0].Save(true);
 
         ImGui.SameLine();

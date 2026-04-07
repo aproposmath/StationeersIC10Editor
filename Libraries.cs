@@ -433,6 +433,14 @@ public static class LibrariesWindow
         if (lib == null)
             return;
 
+        if (lib.State == FileState.Workshop)
+        {
+            Window.SetTab(0);
+            Window.ActiveTab.Editors[0].ResetCode(lib.Data.Instructions);
+            _open = false;
+            return;
+        }
+
         var tabs = Window.Tabs;
 
         foreach (var tab in tabs)
@@ -499,12 +507,17 @@ public static class LibrariesWindow
             Text($"Title: ", width / 2);
             ImGui.SameLine();
 
-            InputText("##title", ref lib.Data.Title, width / 2);
+            bool isWorkshop = lib.State == FileState.Workshop;
+
+            if (isWorkshop)
+                ImGui.Text(lib.Data.Title);
+            else
+                InputText("##title", ref lib.Data.Title, width / 2);
+
             ImGui.SameLine();
 
-
             ImGui.SetCursorPosX(width - buttonSize.x + ImGui.GetStyle().ItemSpacing.x);
-            if (Button("Save", buttonSize, "Save title/description"))
+            if (Button("Save", buttonSize, "Save title/description", isWorkshop))
             {
                 lib.Data.SaveToFile(lib.Data.DirectoryPath);
                 LoadLibraries().Forget();
@@ -549,7 +562,7 @@ public static class LibrariesWindow
 
             ImGui.SetCursorPos(pos);
 
-            ImGui.InputTextMultiline("LibraryDescriptionEdit", ref lib.Data.Description, 1024, new Vector2(width, 60));
+            ImGui.InputTextMultiline("LibraryDescriptionEdit", ref lib.Data.Description, 1024, new Vector2(width, 60), isWorkshop ? ImGuiInputTextFlags.ReadOnly : ImGuiInputTextFlags.None);
 
             if (ImGui.IsItemHovered() && string.IsNullOrEmpty(lib.Data.Description))
                 ImGui.SetTooltip("Description");
