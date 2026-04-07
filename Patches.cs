@@ -71,6 +71,7 @@ public static class IC10EditorPatches
     {
         try
         {
+            Settings.Update();
             foreach (var editor in AllEditors)
                 editor.Draw();
         }

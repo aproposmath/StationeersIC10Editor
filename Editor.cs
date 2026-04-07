@@ -207,7 +207,21 @@ public static class Settings
         _lastLineSpacingOffset = LineSpacingOffset;
     }
 
-    public static bool ShowTooltip => KeyHandler.IsMouseIdle(TooltipDelay / 1000.0f);
+    private static Vector2 _lastMousePos = new Vector2(0, 0);
+    private static double _lastMouseMoveTime = 0.0;
+
+    public static bool ShowTooltip = false;
+    public static void Update()
+    {
+        var mousePos = ImGui.GetMousePos();
+        var time = ImGui.GetTime();
+        if (mousePos != _lastMousePos)
+        {
+            _lastMousePos = mousePos;
+            _lastMouseMoveTime = time;
+        }
+        ShowTooltip = time - _lastMouseMoveTime > TooltipDelay / 1000.0f;
+    }
 }
 
 public class Editor
@@ -1054,7 +1068,7 @@ public class Editor
         {
             var noChanges = Library.Data.Instructions == Code;
             if (doCommit)
-                noChanges = noChanges && Library.State != FileState.Untracked;
+                noChanges = noChanges && Library.State != FileState.Untracked && Library.State != FileState.Modified;
             if (noChanges)
                 return "No changes to " + (doCommit ? "commit" : "save");
             Library.Data.Instructions = Code;

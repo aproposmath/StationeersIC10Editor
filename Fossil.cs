@@ -279,6 +279,7 @@ public enum FileState
     Untracked,
     Unchanged,
     Modified,
+    Workshop,
 }
 
 public class FileVersion

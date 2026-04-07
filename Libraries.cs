@@ -36,9 +36,15 @@ public class VersionedLibrary
     };
 
     public uint Color => Colors[State];
+    public DateTime Date => DateTime.FromFileTimeUtc(Data.DateTime).ToLocalTime();
 
     public void UpdateFileState(Dictionary<string, FileState> fileStates)
     {
+        if (Data.WorkshopFileHandle != 0)
+        {
+            State = FileState.Workshop;
+            return;
+        }
         State = FileState.Untracked;
         if (fileStates.TryGetValue(Data.DirectoryPath.Name, out var state))
             State = state;
@@ -86,14 +92,30 @@ public class LibNode
             var title = Library.Data.Title;
             if (tree && Prefix.Length > 0)
                 title = title.Substring(Prefix.Length + 1);
-            if (Library.Data.WorkshopFileHandle != 0)
-                title += " by " + Library.Data.Author;
+            // if (Library.Data.WorkshopFileHandle != 0)
+            //     title += " by " + Library.Data.Author;
 
-            uint color = Library.Color;
-            float radius = 3.0f; ;
-            var drawList = ImGui.GetWindowDrawList();
-            drawList.AddCircleFilled(ImGui.GetCursorScreenPos() + new Vector2(0, LineHeightWithSpacing / 2), radius, color, 12);
-            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + radius * 2 + 5);
+            float radius = 5.0f; ;
+            var imSize = 0.8f * LineHeight;
+            var posNext = ImGui.GetCursorPos() + new Vector2(Mathf.Max(2 * radius, imSize), 0);
+
+            if (Library.State == FileState.Workshop)
+            {
+                var texPtr = ImGuiManager.ImGuiPointerFor(WorkshopMenu.Instance.SteamImage.texture);
+
+                ImGui.SetCursorPosX(ImGui.GetCursorPosX() - 5f);
+                ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 0.5f * LineHeightWithSpacing - 0.5f * imSize);
+                ImGui.Image(texPtr, new Vector2(imSize, imSize));
+                ImGui.SameLine();
+            }
+            else
+            {
+                uint color = Library.Color;
+                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + imSize / 2 - radius);
+                ImGui.GetWindowDrawList().AddCircleFilled(ImGui.GetCursorScreenPos() + new Vector2(0, LineHeightWithSpacing / 2), radius, color, 12);
+            }
+
+            ImGui.SetCursorPos(posNext);
             if (ImGui.Selectable(title, LibrariesWindow.Selected == Library) || LibrariesWindow._librarySearchResults.Count == 1)
             {
                 LibrariesWindow.Selected = Library;
@@ -105,6 +127,8 @@ public class LibNode
                 }
                 LibrariesWindow._previewEditor.ResetCode(Library?.Data.Instructions ?? "", false);
             }
+            if (ImGui.IsItemHovered() && ShowTooltip)
+                ImGui.SetTooltip($"Title:  {Library.Data.Title}\nPath:   {Library.Data.DirectoryPath.FullName}\nAuthor: {Library?.Data.Author}\nDate:   {Library.Date}");
 
             // Double-click to load
             if (
@@ -125,6 +149,7 @@ public class LibNode
             return;
         }
 
+        ImGui.SetCursorPosX(ImGui.GetCursorPosX() - 5);
         if (ImGui.TreeNode(Name))
         {
             foreach (var child in Children)
@@ -154,7 +179,7 @@ public static class LibrariesWindow
     public static bool IsOpen => _open;
     public static EditorWindow Window;
 
-    private static bool _searchWholeText = false;
+    private static bool _searchFullText = false;
     private static bool _showWorkshopItems = true;
     private static bool _showLocalItems = true;
     private static bool _showUntracked = true;
@@ -213,7 +238,7 @@ public static class LibrariesWindow
 
             ImGui.SameLine();
 
-            if (Checkbox("Whole Text  ", ref _searchWholeText, "Search also the code of the library."))
+            if (Checkbox("Full Text  ", ref _searchFullText, "Search also in the code of the library."))
                 Search();
 
             ImGui.SameLine();
@@ -243,7 +268,7 @@ public static class LibrariesWindow
 
             ImGui.SameLine();
 
-            Checkbox("TreeView", ref _treeView, "Show libraries in tree view\nuse '|' in title to separate folder names");
+            Checkbox("TreeView", ref _treeView, "Show libraries in tree view\nUse '|' in title to separate folder names");
 
             ImGui.SameLine();
             ImGui.SetCursorPosX(width - buttonSize.x - 0 * ImGui.GetStyle().ItemSpacing.x);
@@ -355,7 +380,7 @@ public static class LibrariesWindow
             if (
                 string.IsNullOrEmpty(q)
                 || lib.Data.Title.ToLowerInvariant().Contains(q)
-                || (_searchWholeText && lib.Data.Instructions.ToLowerInvariant().Contains(q))
+                || (_searchFullText && lib.Data.Instructions.ToLowerInvariant().Contains(q))
             )
             {
                 _librarySearchResults.Add(lib);
@@ -455,7 +480,6 @@ public static class LibrariesWindow
 
         foreach (var node in OuterNodes)
             node.Draw(_treeView);
-
     }
 
     public static void DrawSelectedLibrary()
@@ -469,9 +493,8 @@ public static class LibrariesWindow
             var lib = Selected;
             var buttonPos = ImGui.GetCursorPos() + new Vector2(width - 4 * buttonSize.x - 3 * ImGui.GetStyle().ItemSpacing.x, 0);
             Text($"Author: {lib.Data.Author}");
-            var date = DateTime.FromFileTimeUtc(lib.Data.DateTime);
-            Text($"Date:   {date.ToLocalTime()}");
-            Text($"Path:   {lib.Data.DirectoryPath.Name}");
+            Text($"Date:   {lib.Date}");
+            // Text($"Path:   {lib.Data.DirectoryPath.Name}");
             // ImGui.SameLine();
             Text($"Title: ", width / 2);
             ImGui.SameLine();
