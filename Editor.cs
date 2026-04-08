@@ -1073,7 +1073,7 @@ public class Editor
                 return "No changes to " + (doCommit ? "commit" : "save");
             Library.Data.Instructions = Code;
             Library.Data.SaveToFile(Library.Data.DirectoryPath);
-            LibrariesWindow.LoadLibraries().Forget();
+            Library.UpdateFileState().Forget();
             var msg = $"Library '{Library.Data.Title}' saved.";
             if (doCommit)
             {
@@ -1082,9 +1082,11 @@ public class Editor
                 {
                     try
                     {
-                        FossilVCS.AddAndCommit([Library.Data.DirectoryPath.Name], _confirmWindow.UserInput).Forget();
-                        Library.State = FileState.Unchanged;
-                        msg = $"Version saved: {_confirmWindow.UserInput}";
+                        FossilVCS.AddAndCommit([Library.Data.DirectoryPath.Name], _confirmWindow.UserInput).ContinueWith(() =>
+                        {
+                            Library.State = FileState.Unchanged;
+                            KeyHandler.CommandStatus = $"Version saved: {_confirmWindow.UserInput}";
+                        });
                     }
                     catch (Exception ex)
                     {

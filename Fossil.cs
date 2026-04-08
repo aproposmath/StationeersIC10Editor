@@ -254,7 +254,7 @@ public class FossilVCS
         }
     }
 
-    public static async UniTaskVoid AddAndCommit(string[] paths, string message = null)
+    public static async UniTask AddAndCommit(string[] paths, string message = null)
     {
         var arg = "";
         foreach (var path in paths)
