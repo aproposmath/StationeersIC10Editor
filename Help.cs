@@ -7,14 +7,14 @@ using ImGuiNET;
 
 using UnityEngine;
 
-using static Settings;
 using static ImGuiUtils;
+using static Settings;
 
 public static class HelpWindow
 {
     public static bool IsOpen = false;
     private static int _tabIndex = 0;
-    
+
     private static ImGuiTabItemFlags _TabFlags(int i)
     {
         return i == _tabIndex ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None;
@@ -40,31 +40,31 @@ public static class HelpWindow
                 ImGui.TextWrapped(
                     "This is the IC10 Editor. It allows you to edit the source code of IC10 programs with syntax highlighting, undo/redo, and other features."
                 );
-                
+
                 if (Button("Native", buttonSize, "Switch to the native Stationeers IC10 editor."))
                     LibrariesWindow.Window.SwitchToNativeEditor();
 
             }
             ImGui.EndTabItem();
-            if(ImGui.IsItemClicked(ImGuiMouseButton.Left))
+            if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
                 _tabIndex = 0;
-                
+
             if (ImGui.BeginTabItem("Config", _TabFlags(1)))
                 DrawConfig();
             ImGui.EndTabItem();
-            if(ImGui.IsItemClicked(ImGuiMouseButton.Left))
+            if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
                 _tabIndex = 1;
-                
+
             if (ImGui.BeginTabItem("Keybindings", _TabFlags(2)))
                 DrawKeybindings();
             ImGui.EndTabItem();
-            if(ImGui.IsItemClicked(ImGuiMouseButton.Left))
+            if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
                 _tabIndex = 2;
 
             if (ImGui.BeginTabItem("VIM", _TabFlags(3)))
                 DrawVIM();
             ImGui.EndTabItem();
-            if(ImGui.IsItemClicked(ImGuiMouseButton.Left))
+            if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
                 _tabIndex = 3;
 
         }

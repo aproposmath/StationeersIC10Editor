@@ -2,11 +2,11 @@ namespace StationeersIC10Editor;
 
 using System;
 
+using BepInEx.Configuration;
+
 using ImGuiNET;
 
 using UnityEngine;
-
-using BepInEx.Configuration;
 
 public readonly struct ScopedStyleVar : IDisposable
 {

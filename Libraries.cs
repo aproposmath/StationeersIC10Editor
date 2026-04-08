@@ -113,7 +113,7 @@ public class LibNode
 
     private void MoveTo(LibNode target, string prefix = null)
     {
-        if (target == this || target.IsLeaf || target.FullName.StartsWith(FullName))
+        if (target == this || target.FullName.StartsWith(FullName))
             return;
 
         L.Debug($"Moving library {FullName} to {target.FullName} prefix={prefix}");
@@ -154,7 +154,7 @@ public class LibNode
         bool hasChildren = Children.Count > 0;
         bool hasLibrary = Library != null;
         bool isSelected = hasLibrary && LibrariesWindow.Selected == Library;
-        string imguiLabel = Name + (hasLibrary ? "##" + Library.Data.Title : $" ({Count})");
+        string imguiLabel = Name + (hasLibrary ? "##" + Library.Data.Title : $"##{FullName}");
 
         flags |= isSelected ? ImGuiTreeNodeFlags.Selected : 0;
         flags |= (hasChildren && tree) ? 0 : ImGuiTreeNodeFlags.Leaf;
@@ -175,6 +175,14 @@ public class LibNode
             }
             ImGui.EndDragDropTarget();
         }
+
+        if (hasChildren)
+        {
+            ImGui.SameLine();
+            ImGui.Text($"({Count})");
+        }
+
+
 
         if (ImGui.BeginDragDropSource())
         {
@@ -478,7 +486,7 @@ public static class LibrariesWindow
             ImGui.End();
 
         }
-        
+
         if (_fileHistoryWindow != null)
             _fileHistoryWindow.Draw();
 
@@ -618,11 +626,11 @@ public static class LibrariesWindow
 
     }
 
-    public static int LoadLibraryEntry(VersionedLibrary lib, FileVersion version=null)
+    public static int LoadLibraryEntry(VersionedLibrary lib, FileVersion version = null)
     {
         if (lib == null)
             return -1;
-            
+
         var code = version?.Library?.Instructions ?? lib.Data.Instructions;
 
         if (lib.State == FileState.Workshop)
