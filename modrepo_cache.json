@@ -1,5 +1,24 @@
 {
-    "sha256:0a3aeb5764feed4fe5561d23c011fe60e368fb307998e1f3b7d1e15da1c3c585": false,
+    "sha256:2245850ca32559fb4c552ee8b9d4ebd09fb481ad5fd5ca9edf95a860cb8b1dff": {
+        "author": "aproposmath",
+        "branch": [
+            "main"
+        ],
+        "depends_on": [],
+        "digest": "sha256:2245850ca32559fb4c552ee8b9d4ebd09fb481ad5fd5ca9edf95a860cb8b1dff",
+        "id": "com.github.aproposmath.StationeersIC10Editor",
+        "name": "IC10 Editor",
+        "tag": [
+            "IC10",
+            "Editor",
+            "Code",
+            "BepInEx",
+            "VIM",
+            "StationeersLaunchPad"
+        ],
+        "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/main/IC10Editor-main.zip",
+        "version": "0.8.9.10-dev"
+    },
     "sha256:3a566aa8fd1fb7b64bb1aa51d084e08bb9f9fcae357b3f2997aebbf5fa95611e": {
         "author": "aproposmath",
         "branch": [],
@@ -36,26 +55,7 @@
         "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/v0.8.9/IC10Editor-v0.8.9.zip",
         "version": "0.8.9"
     },
-    "sha256:779d1ec2f9ac49a18475f2a487211595453328bf7c591f1763e0806789977bbd": {
-        "author": "aproposmath",
-        "branch": [
-            "main"
-        ],
-        "depends_on": [],
-        "digest": "sha256:779d1ec2f9ac49a18475f2a487211595453328bf7c591f1763e0806789977bbd",
-        "id": "com.github.aproposmath.StationeersIC10Editor",
-        "name": "IC10 Editor",
-        "tag": [
-            "IC10",
-            "Editor",
-            "Code",
-            "BepInEx",
-            "VIM",
-            "StationeersLaunchPad"
-        ],
-        "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/main/IC10Editor-main.zip",
-        "version": "0.8.9.9-dev"
-    },
+    "sha256:8929bba35a8649220fa789803d28c43fd3d8c6bcfd705d5dd312eb568520684e": false,
     "sha256:8d4f441269583fdeed267366338edcb2c468c492639dec650ca1638e8476c84b": {
         "author": "aproposmath",
         "branch": [],
