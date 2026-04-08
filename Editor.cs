@@ -1068,7 +1068,7 @@ public class Editor
         {
             var noChanges = Library.Data.Instructions == Code;
             if (doCommit)
-                noChanges = noChanges && Library.State != FileState.Untracked && Library.State != FileState.Modified;
+                noChanges = noChanges && (Library.State != FileState.Untracked) && (Library.State != FileState.Modified);
             if (noChanges)
                 return "No changes to " + (doCommit ? "commit" : "save");
             Library.Data.Instructions = Code;

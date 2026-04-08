@@ -258,13 +258,13 @@ public class FossilVCS
     {
         var arg = "";
         foreach (var path in paths)
-            arg += $"\"{path}\" ";
+            arg += $" \"{path}/instruction.xml\"";
 
         L.Debug($"Adding and committing {paths}, message: {message}");
         if (string.IsNullOrEmpty(message))
             message = $"Update {paths}";
         message = message.Replace("\"", "'");
-        await RunAsync($"add \"{arg}\"");
+        await RunAsync($"add {arg}");
         await RunAsync($"commit --no-warnings -m \"{message}\"");
         await LibrariesWindow.LoadLibraries();
     }
