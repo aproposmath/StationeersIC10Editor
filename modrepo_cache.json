@@ -1,11 +1,11 @@
 {
-    "sha256:2245850ca32559fb4c552ee8b9d4ebd09fb481ad5fd5ca9edf95a860cb8b1dff": {
+    "sha256:2301337005e42388b98b2b07ec0556cdc6b948af7e9f4230cd8a592a97e2638f": {
         "author": "aproposmath",
         "branch": [
             "main"
         ],
         "depends_on": [],
-        "digest": "sha256:2245850ca32559fb4c552ee8b9d4ebd09fb481ad5fd5ca9edf95a860cb8b1dff",
+        "digest": "sha256:2301337005e42388b98b2b07ec0556cdc6b948af7e9f4230cd8a592a97e2638f",
         "id": "com.github.aproposmath.StationeersIC10Editor",
         "name": "IC10 Editor",
         "tag": [
@@ -17,7 +17,7 @@
             "StationeersLaunchPad"
         ],
         "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/main/IC10Editor-main.zip",
-        "version": "0.8.9.10-dev"
+        "version": "0.8.9.11-dev"
     },
     "sha256:3a566aa8fd1fb7b64bb1aa51d084e08bb9f9fcae357b3f2997aebbf5fa95611e": {
         "author": "aproposmath",
