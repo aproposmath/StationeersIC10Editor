@@ -212,7 +212,7 @@ public class IC10EditorPlugin : BaseUnityPlugin
             CodeFormatters.RegisterFormatter("Plain", typeof(PlainTextFormatter));
             CodeFormatters.RegisterFormatter("IC10", typeof(IC10.IC10CodeFormatter), true);
 
-            FossilVCS.Init();
+            FossilVCS.Init().Forget();
             // CodeFormatters.RegisterFormatter("Python", typeof(ImGuiEditor.LSP.LSPFormatter));
         }
         catch (Exception ex)

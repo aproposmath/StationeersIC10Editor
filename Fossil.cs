@@ -8,6 +8,8 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Xml.Serialization;
+using System.Text;
+using System.Threading.Tasks;
 
 using Assets.Scripts.UI;
 
@@ -55,7 +57,7 @@ public static class FossilInstaller
             if (!File.Exists(FossilExe))
                 return false;
 
-            _IsFossilExeVerified = true;  // ComputeSHA256(FossilExe) == FossilExeSHA256;
+            _IsFossilExeVerified = ComputeSHA256(FossilExe) == FossilExeSHA256;
             return _IsFossilExeVerified;
         }
     }
@@ -107,46 +109,17 @@ public class FossilVCS
 {
     public static readonly string ScriptsDir = FossilInstaller.ScriptsDir;
     public static readonly string CacheDir = FossilInstaller.CacheDir;
-    public static readonly string RepoFilePath = Path.Combine(ScriptsDir, ".fossil.repo");
+    public static readonly string BackupDir = Path.Combine(CacheDir, "backups");
+    public static readonly string RepoFileName = ".fossil.repo";
+    public static readonly string RepoFilePath = Path.Combine(ScriptsDir, RepoFileName);
+    public static int KeepBackupCount = 50;
 
 
     public static async UniTask<string> RunAsync(string args)
     {
         L.Debug($"Running Fossil command: \"{args}\" at \"{ScriptsDir}\"");
         var sw = Stopwatch.StartNew();
-        var psi = new ProcessStartInfo
-        {
-            FileName = FossilInstaller.FossilExe,
-            Arguments = args,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            WorkingDirectory = ScriptsDir,
-        };
-        psi.EnvironmentVariables["FOSSIL_HOME"] = Path.Combine(CacheDir);
-
         await UniTask.SwitchToThreadPool();
-
-        // Hack: this is not async, it's still blocking a (non-main)thread
-        using var process = Process.Start(psi);
-        process.WaitForExit();
-
-        if (process.ExitCode != 0)
-        {
-            L.Info($"Error while running Fossil command: {args}");
-            L.Info("\t" + process.StandardOutput.ReadToEnd());
-            var stdErr = process.StandardError.ReadToEnd();
-            L.Info("\t" + stdErr);
-            throw new Exception(stdErr);
-        }
-        L.Debug($"\tcommand |{args}| took " + sw.ElapsedMilliseconds + "ms");
-        return process.StandardOutput.ReadToEnd();
-    }
-
-    public static string Run(string args)
-    {
-        L.Debug($"Running Fossil command: \"{args}\" at \"{ScriptsDir}\"");
         var psi = new ProcessStartInfo
         {
             FileName = FossilInstaller.FossilExe,
@@ -159,19 +132,98 @@ public class FossilVCS
         };
         psi.EnvironmentVariables["FOSSIL_HOME"] = Path.Combine(CacheDir);
 
-        using var process = Process.Start(psi);
-        process.WaitForExit();
-        if (process.ExitCode != 0)
+        var tcs = new TaskCompletionSource<int>();
+
+        var output = new StringBuilder();
+        var error = new StringBuilder();
+
+        using var process = new Process();
+        process.StartInfo = psi;
+        process.EnableRaisingEvents = true;
+
+        process.OutputDataReceived += (s, e) =>
+        {
+            if (e.Data != null)
+                output.AppendLine(e.Data);
+        };
+
+        process.ErrorDataReceived += (s, e) =>
+        {
+            if (e.Data != null)
+                error.AppendLine(e.Data);
+        };
+
+        process.Exited += (s, e) =>
+        {
+            tcs.TrySetResult(process.ExitCode);
+        };
+
+        if (!process.Start())
+            throw new InvalidOperationException("Failed to start process");
+
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        var exitCode = await tcs.Task;
+
+        if (exitCode != 0)
         {
             L.Info($"Error while running Fossil command: {args}");
-            L.Info("\t" + process.StandardOutput.ReadToEnd());
-            var stdErr = process.StandardError.ReadToEnd();
+            L.Info("\t" + output.ToString());
+            var stdErr = error.ToString();
             L.Info("\t" + stdErr);
             throw new Exception(stdErr);
         }
-        return process.StandardOutput.ReadToEnd();
+
+        L.Debug($"\tcommand |{args}| took {sw.ElapsedMilliseconds}ms");
+        L.Debug($"\toutput: {output}");
+        L.Debug($"\terror: {error}");
+        return output.ToString();
     }
 
+    public static async UniTask MakeBackup()
+    {
+        if (!Directory.Exists(BackupDir))
+            Directory.CreateDirectory(BackupDir);
+
+        var archiveName = $"scripts_backup_{DateTime.Now:yyyyMMdd_HHmmss}.zip";
+        var zipPath = Path.Combine(BackupDir, archiveName);
+
+        using (var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create))
+        {
+            foreach (var dir in Directory.GetDirectories(ScriptsDir))
+            {
+                var path = Path.Combine(dir, "instruction.xml");
+                if (!File.Exists(path))
+                    continue;
+                var relativePath = Path.Combine(Path.GetFileName(dir), "instruction.xml");
+                archive.CreateEntryFromFile(path, relativePath);
+            }
+
+            if (File.Exists(RepoFilePath))
+                archive.CreateEntryFromFile(RepoFilePath, RepoFileName);
+        }
+
+        L.Info($"Created backup of all scripts (including fossil repo): {zipPath}");
+
+        var backupFiles = new List<string>(Directory.GetFiles(BackupDir, "scripts_backup_*.zip"));
+        backupFiles.Sort();
+        L.Info($"Found {backupFiles.Count} backup files, keeping one per month and the last {KeepBackupCount}");
+
+        var monthlyBackups = new Dictionary<string, string>();
+        foreach (var file in backupFiles)
+        {
+            var date = Path.GetFileNameWithoutExtension(file).Substring("scripts_backup_".Length);
+            monthlyBackups[date.Substring(0, 6)] = file;
+        }
+
+        var backupsToDelete = backupFiles.GetRange(0, Math.Max(0, backupFiles.Count - KeepBackupCount)).Except(monthlyBackups.Values).ToList();
+        foreach (var file in backupsToDelete)
+        {
+            L.Info($"Deleting old backup: {file}");
+            File.Delete(file);
+        }
+    }
 
     public static async UniTaskVoid Init()
     {
@@ -181,16 +233,20 @@ public class FossilVCS
 
         var repoName = Path.GetFileName(RepoFilePath);
 
+        await MakeBackup();
+
         if (!File.Exists(RepoFilePath))
-            Run($"init {repoName}");
+            await RunAsync($"init {repoName}");
 
         try
         {
-            if (Run("status -b").Trim() == "none")
-                Run($"open -k {repoName}");
+            if ((await RunAsync("status -b")).Trim() == "none")
+                await RunAsync($"open -k {repoName}");
 
-            if (Run("status -b").Trim() == "none")
+            if ((await RunAsync("status -b")).Trim() == "none")
                 throw new Exception("Failed to open Fossil repository");
+
+            await RunAsync("settings ignore-glob \"*/*.png,*.vdf\"");
         }
         catch (Exception ex)
         {
@@ -198,14 +254,19 @@ public class FossilVCS
         }
     }
 
-    public static void AddAndCommit(string path, string message = null)
+    public static async UniTaskVoid AddAndCommit(string[] paths, string message = null)
     {
-        L.Debug($"Adding and committing {path}, message: {message}");
+        var arg = "";
+        foreach (var path in paths)
+            arg += $"\"{path}\" ";
+
+        L.Debug($"Adding and committing {paths}, message: {message}");
         if (string.IsNullOrEmpty(message))
-            message = $"Update {path}";
+            message = $"Update {paths}";
         message = message.Replace("\"", "'");
-        Run($"add \"{path}\"");
-        Run($"commit --no-warnings -m \"{message}\"");
+        await RunAsync($"add \"{arg}\"");
+        await RunAsync($"commit --no-warnings -m \"{message}\"");
+        await LibrariesWindow.LoadLibraries();
     }
 
     public static async UniTask<FileState> GetFileState(string path)
@@ -213,10 +274,10 @@ public class FossilVCS
         if ((await RunAsync("extra")).Contains(path))
             return FileState.Untracked;
         var diff = await RunAsync("ls -v");
-        L.Debug($"diff: {diff}");
+        // L.Debug($"diff: {diff}");
         if (diff.Contains("UNCHANGED  " + path))
         {
-            L.Debug($"File {path} is unchanged");
+            // L.Debug($"File {path} is unchanged");
             return FileState.Unchanged;
         }
         return FileState.Modified;
@@ -228,31 +289,29 @@ public class FossilVCS
         static string GetName(string path) => path.Split('/')[0];
 
         var extraPromise = RunAsync("extra");
-        var lsPromise = RunAsync("ls -v");
-
-        // await all
+        var ls = await RunAsync("ls -v");
         var extra = await extraPromise;
-        var ls = await lsPromise;
 
         foreach (var path in extra.Split('\n'))
             result[GetName(path)] = FileState.Untracked;
         foreach (var line in ls.Split('\n'))
         {
-            if (string.IsNullOrEmpty(line) || !line.EndsWith("instruction.xml"))
+            // L.Debug($"ls line: |{line}|");
+            var trimmed = line.Trim();
+            if (string.IsNullOrEmpty(trimmed) || !trimmed.EndsWith("instruction.xml"))
                 continue;
-            var state = line.Trim().StartsWith("EDITED ") ? FileState.Modified : FileState.Unchanged;
-            result[GetName(line.Substring(11))] = state;
-            L.Debug($"File state for {GetName(line.Substring(11))}: {state}");
-            L.Debug($"\tline: {line}");
+            var state = trimmed.StartsWith("EDITED ") ? FileState.Modified : FileState.Unchanged;
+            result[GetName(trimmed.Substring(11))] = state;
+            // L.Debug($"File state for {GetName(trimmed.Substring(11))}: {state}");
         }
         return result;
     }
 
-    public static List<FileVersion> Log(string path)
+    public static async UniTask<List<FileVersion>> Log(string path)
     {
         if (string.IsNullOrEmpty(path))
             path = RepoFilePath;
-        var log = Run($"timeline -p \"{path}\" --format \"%h\t%d\t%c\"");
+        var log = await RunAsync($"timeline -p \"{path}\" --format \"%h\t%d\t%c\"");
         L.Debug($"Log result: {log}");
         var lines = log.Replace("\r\n", "\n").Split('\n').Select(l => l.Trim()).Where(l => !string.IsNullOrEmpty(l));
 
@@ -273,17 +332,17 @@ public class FossilVCS
         return result;
     }
 
-    public static string GetVersion(string path, string version)
+    public static async UniTask<string> GetVersionAsync(string path, string version)
     {
-        return Run($"cat {path} -r {version}");
+        return await RunAsync($"cat {path} -r {version}");
     }
 
-    public static string GetDiff(string path, string old_version, string new_version = null)
+    public static async UniTask<string> GetDiff(string path, string old_version, string new_version = null)
     {
         var cmd = $"diff {path} --to {old_version}";
         if (!string.IsNullOrEmpty(new_version))
             cmd += $" --from {new_version}";
-        var diff = Run(cmd);
+        var diff = await RunAsync(cmd);
         // remove last line
         if (!string.IsNullOrEmpty(diff))
             diff = diff.Substring(0, diff.LastIndexOf('\n'));
@@ -308,22 +367,17 @@ public class FileVersion
     public string Hash;
     public string Date;
     public string Message;
+    public VersionedLibrary VersionedLibrary;
     public InstructionData Library = null;
 
-    public string _RawContent = null;
-    public string Content
+    public async UniTask LoadLibrary()
     {
-        get
-        {
-            if (Library == null)
-            {
-                _RawContent = FossilVCS.Run($"cat \"{Path}\\instruction.xml\" -r {Hash}");
-                var xmlSerializer = new XmlSerializer(typeof(InstructionData));
-                using var textReader = new StringReader(_RawContent);
-                Library = (InstructionData)xmlSerializer.Deserialize(textReader);
-            }
-            return Library.Instructions;
-        }
+        if (Library != null)
+            return;
+        var _RawContent = await FossilVCS.RunAsync($"cat \"{Path}\\instruction.xml\" -r {Hash}");
+        var xmlSerializer = new XmlSerializer(typeof(InstructionData));
+        using var textReader = new StringReader(_RawContent);
+        Library = (InstructionData)xmlSerializer.Deserialize(textReader);
     }
 
     public string Label => string.IsNullOrEmpty(Date) || string.IsNullOrEmpty(Message) ? $"{Date}{Message}" : $"{Date} - {Message}";
@@ -336,25 +390,37 @@ public class FileHistoryWindow
     public List<FileVersion> Versions = new List<FileVersion>();
     private Editor _previewEditor;
     public FileVersion SelectedVersion = null;
-    private EditorTab _tab;
-    public InstructionData Library => _tab.Library;
+    public VersionedLibrary Library;
 
-    public FileHistoryWindow(EditorTab tab)
+    public FileHistoryWindow(VersionedLibrary library)
     {
-        _tab = tab;
+        Library = library;
     }
 
     public void Open()
     {
         IsOpen = true;
-        Versions = FossilVCS.Log(Library.DirectoryPath.Name);
-        var currentVersion = new FileVersion { Hash = "", Path = "", Date = "", Message = "Last saved", Library = Library };
+        LoadVersions().Forget();
+    }
+
+    public async UniTaskVoid LoadVersions()
+    {
+        Versions = await FossilVCS.Log(Library.Data.DirectoryPath.Name);
+        var currentVersion = new FileVersion { Hash = "", Path = "", Date = "", Message = "Last saved", Library = Library.Data };
         Versions.Insert(0, currentVersion);
+        foreach (var v in Versions)
+            v.VersionedLibrary = Library;
     }
 
     public void Close()
     {
         IsOpen = false;
+    }
+
+    public async UniTaskVoid LoadVersionCode(FileVersion version)
+    {
+        await version.LoadLibrary();
+        _previewEditor.ResetCode(version.Library.Instructions, false);
     }
 
     public void Draw()
@@ -364,14 +430,14 @@ public class FileHistoryWindow
         using var _ = new ScopedStyleVar(ImGuiStyleVar.FrameRounding, 2.0f);
         ImGui.SetNextWindowSize(new Vector2(1300, 800), ImGuiCond.FirstUseEver);
         if (
-            ImGui.Begin($"Version History: {Library.Title}", ref IsOpen, ImGuiWindowFlags.NoSavedSettings)
+            ImGui.Begin($"Version History: {Library.Data.Title}", ref IsOpen, ImGuiWindowFlags.NoSavedSettings)
         )
         {
             using (new Pane("Versions", 0.4f, -1))
             {
                 foreach (var version in Versions)
                 {
-                    if (ImGui.Selectable(version.Label, SelectedVersion == version))
+                    if (ImGui.Selectable(version.Label, SelectedVersion == version) && SelectedVersion != version)
                     {
                         SelectedVersion = version;
                         if (_previewEditor == null)
@@ -379,7 +445,8 @@ public class FileHistoryWindow
                             _previewEditor = new Editor(null, Library);
                             _previewEditor.IsReadOnly = true;
                         }
-                        _previewEditor.ResetCode(version.Content, false);
+                        _previewEditor.ResetCode("# Loading version...", false);
+                        LoadVersionCode(version).Forget();
                     }
                 }
             }
@@ -411,7 +478,10 @@ public class FileHistoryWindow
 
             if (Button("Load", buttonSize, "Load this version into editor", SelectedVersion == null))
             {
-                _tab.Editors[0].ResetCode(SelectedVersion.Content);
+                // if (_tab != null)
+                //     _tab.Editors[0].ResetCode(SelectedVersion.Library.Instructions);
+                // else
+                LibrariesWindow.LoadLibraryEntry(SelectedVersion.VersionedLibrary, SelectedVersion);
                 IsOpen = false;
             }
         }

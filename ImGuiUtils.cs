@@ -6,6 +6,8 @@ using ImGuiNET;
 
 using UnityEngine;
 
+using BepInEx.Configuration;
+
 public readonly struct ScopedStyleVar : IDisposable
 {
     private readonly int Count = 0;
@@ -26,31 +28,41 @@ public readonly struct ScopedStyleVar : IDisposable
 public readonly struct ScopedFont : IDisposable
 {
     private readonly bool Apply;
-    private readonly float FontScale;
-    public ScopedFont(ImFontPtr font, float fontScale = -1f, bool apply = true)
+    public ScopedFont(ImFontPtr font, bool apply = true)
+    {
+        Apply = apply;
+        if (Apply)
+            ImGui.PushFont(font);
+    }
+
+    public void Dispose()
+    {
+        if (Apply)
+            ImGui.PopFont();
+    }
+}
+
+public readonly struct ScopedFontScale : IDisposable
+{
+    private readonly bool Apply;
+    private readonly float OldScale;
+    public ScopedFontScale(float scale, bool apply = true)
     {
         Apply = apply;
         if (Apply)
         {
-            FontScale = -1.0f;
-            if (fontScale != -1f)
-            {
-                // FontScale = ImGui.GetIO().FontGlobalScale;
-                // ImGui.SetWindowFontScale(fontScale);
-            }
-            ImGui.PushFont(font);
+            var io = ImGui.GetIO();
+            OldScale = io.FontGlobalScale;
+            io.FontGlobalScale = scale;
         }
     }
 
     public void Dispose()
     {
         if (Apply)
-        {
-            // if (FontScale != -1.0f)
-            //     ImGui.GetIO().FontGlobalScale = FontScale;
-            ImGui.PopFont();
-        }
+            ImGui.GetIO().FontGlobalScale = OldScale;
     }
+
 }
 
 public readonly struct ScopedItemWidth : IDisposable
@@ -214,6 +226,48 @@ public class ImGuiUtils
     public static uint Color(uint r, uint g, uint b, uint a = 255)
     {
         return (a << 24) | (b << 16) | (g << 8) | r;
+    }
+
+    public static class Config
+    {
+
+        public static void Bool(string label, ConfigEntry<bool> entry)
+        {
+            var value = entry.Value;
+            if (ImGui.Checkbox(label, ref value))
+                entry.BoxedValue = value;
+        }
+
+        public static float FloatOptionWidth => ImGui.CalcTextSize("000000.00").x;
+
+        public static void Float(string label, ConfigEntry<float> entry, float min, float max)
+        {
+            var value = entry.Value;
+
+            if (InputFloat(label, ref value, FloatOptionWidth))
+                entry.BoxedValue = value;
+            ImGui.SameLine();
+            if (ImGui.Button("Reset"))
+            {
+                entry.BoxedValue = 1.0f;
+                value = 1.0f;
+            }
+        }
+
+        public static void Float(string label, ConfigEntry<float> entry)
+        {
+            var value = entry.Value;
+            if (InputFloat(label, ref value, FloatOptionWidth))
+                entry.BoxedValue = value;
+        }
+
+        public static void Int(string label, ConfigEntry<int> entry)
+        {
+            var value = entry.Value;
+            if (InputInt(label, ref value, FloatOptionWidth, -20, 20))
+                entry.BoxedValue = value;
+        }
+
     }
 
 }

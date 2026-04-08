@@ -1082,10 +1082,9 @@ public class Editor
                 {
                     try
                     {
-                        FossilVCS.AddAndCommit(Library.Data.DirectoryPath.Name, _confirmWindow.UserInput);
+                        FossilVCS.AddAndCommit([Library.Data.DirectoryPath.Name], _confirmWindow.UserInput).Forget();
                         Library.State = FileState.Unchanged;
                         msg = $"Version saved: {_confirmWindow.UserInput}";
-                        LibrariesWindow.LoadLibraries().Forget();
                     }
                     catch (Exception ex)
                     {
@@ -1114,6 +1113,7 @@ public class Editor
 
     public unsafe void Draw(Vector2 pos, Vector2 size, string id)
     {
+        var _f = new ScopedFont(ImGui.GetIO().Fonts.Fonts[0]);
         _textAreaSize = size;
         ImGui.BeginChild(id, size, true);
         _textAreaOrigin = pos;
@@ -1274,13 +1274,13 @@ public class EditorTab
 
     public string Title => Library?.Title ?? "Motherboard";
 
-    public EditorTab(EditorWindow window, Editor editor, InstructionData lib)
+    public EditorTab(EditorWindow window, Editor editor, VersionedLibrary lib)
     {
-        Library = lib;
+        Library = lib?.Data;
         ParentWindow = window;
         editor.ParentTab = this;
         Editors = new List<Editor> { editor };
-        VersionWindow = new FileHistoryWindow(this);
+        VersionWindow = new FileHistoryWindow(lib);
     }
 
     public int AddEditor(Editor editor)
@@ -1477,9 +1477,6 @@ public class EditorWindow
                 window.ToggleVisibility();
     }
 
-    private bool _helpWindowVisible = false;
-    private bool _debugWindowVisible = false;
-
     public bool HasFileVCS => !IsMotherboard && ActiveTab[0].Library.State != FileState.Workshop;
     public bool IsFileReadonly => !IsMotherboard && ActiveTab[0].Library.State == FileState.Workshop;
 
@@ -1511,7 +1508,7 @@ public class EditorWindow
         ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 2 * ImGui.GetStyle().ItemSpacing.x);
 
         if (Button("?", smallButtonSize, "Help/Configuration Menu"))
-            _helpWindowVisible = !_helpWindowVisible;
+            HelpWindow.IsOpen = !HelpWindow.IsOpen;
 
         ImGui.SameLine();
 
@@ -1522,9 +1519,9 @@ public class EditorWindow
 
         ImGui.SameLine();
 
-        using (new ScopedFont(UI.ImGuiUi.ImguiHelper.GetFont(1), 2.0f))
+        using (new ScopedFont(UI.ImGuiUi.ImguiHelper.GetFont(1)))
         {
-            ImGui.SetWindowFontScale(1.4f * Scale);
+            ImGui.SetWindowFontScale(1.4f);
             if (Button("⟲", smallButtonSize, "Undo (Ctrl+Z)", ActiveEditor.UndoList.Count == 0))
                 ActiveEditor.Undo();
 
@@ -1534,7 +1531,7 @@ public class EditorWindow
                 ActiveEditor.Undo();
 
             ImGui.SameLine();
-            ImGui.SetWindowFontScale(Scale);
+            ImGui.SetWindowFontScale(1.0f);
         }
 
         float comboWidth = 130;
@@ -1705,18 +1702,17 @@ public class EditorWindow
         _openGameWindows = count;
     }
 
-    private Queue<double> _renderTimes = new();
-    private Stopwatch _renderStopwatch;
-
     public void Draw()
     {
         if (!Show)
             return;
 
+        using var _fscale = new ScopedFontScale(Scale);
+
         LibrariesWindow.Window = this;
 
-        if (_debugWindowVisible)
-            _renderStopwatch = System.Diagnostics.Stopwatch.StartNew();
+        if (DebugWindow.IsOpen)
+            DebugWindow.RenderStopwatch = Stopwatch.StartNew();
 
         using var _fr = new ScopedStyleVar(ImGuiStyleVar.FrameRounding, 3.0f);
         // make sure the native editor is hidden
@@ -1756,7 +1752,6 @@ public class EditorWindow
         ImGui.Begin(Title);
         ImGui.GetStyle().Colors[(int)ImGuiCol.Tab] = new Vector4(0.2f, 0.2f, 0.2f, 1.0f);
 
-        ImGui.SetWindowFontScale(Scale);
         UpdateTextSize();
         DrawHeader();
 
@@ -1805,8 +1800,8 @@ public class EditorWindow
 
         LibrariesWindow.Draw();
 
-        DrawHelpWindow();
-        DrawDebugWindow();
+        HelpWindow.Draw();
+        DebugWindow.Draw();
     }
 
     public void CloseTab(int index = -1)
@@ -1839,226 +1834,6 @@ public class EditorWindow
             return;
         }
         _activeTabIndex = index;
-    }
-
-    private void DrawBoolOption(string label, ConfigEntry<bool> entry)
-    {
-        var value = entry.Value;
-        if (ImGui.Checkbox(label, ref value))
-            entry.BoxedValue = value;
-    }
-
-    static float FloatOptionWidth => ImGui.CalcTextSize("000000.00").x;
-
-    private void DrawFloatOption(string label, ConfigEntry<float> entry, float min, float max)
-    {
-        var value = entry.Value;
-
-        if (InputFloat(label, ref value, FloatOptionWidth))
-            entry.BoxedValue = value;
-        ImGui.SameLine();
-        if (ImGui.Button("Reset"))
-        {
-            entry.BoxedValue = 1.0f;
-            value = 1.0f;
-        }
-    }
-
-    private void DrawFloatOption(string label, ConfigEntry<float> entry)
-    {
-        var value = entry.Value;
-        if (InputFloat(label, ref value, FloatOptionWidth))
-            entry.BoxedValue = value;
-    }
-
-    private void DrawIntOption(string label, ConfigEntry<int> entry)
-    {
-        var value = entry.Value;
-        if (InputInt(label, ref value, FloatOptionWidth, -20, 20))
-            entry.BoxedValue = value;
-    }
-
-    public void DrawHelpWindow()
-    {
-        if (!_helpWindowVisible)
-            return;
-
-        using var _ = new ScopedStyleColor(ImGuiCol.WindowBg, ICodeFormatter.ColorFromVector4(0.2f, 0.2f, 0.2f, 1.0f));
-        ImGui.SetNextWindowSize(Scale * new Vector2(600, 400), ImGuiCond.FirstUseEver);
-        ImGui.Begin(
-            "IC10 Editor Help",
-            ref _helpWindowVisible,
-            ImGuiWindowFlags.NoSavedSettings
-        );
-        ImGui.SetWindowFontScale(Mathf.Clamp(Scale, 0.5f, 5.0f));
-
-        ImGui.TextWrapped(
-            "This is the IC10 Editor. It allows you to edit the source code of IC10 programs with syntax highlighting, undo/redo, and other features."
-        );
-
-        if (Button("Native", buttonSize, "Switch to the native Stationeers IC10 editor."))
-            SwitchToNativeEditor();
-
-        ImGui.Separator();
-        ImGui.Text("\nConfiguration:");
-        DrawBoolOption("Pause Game on Open", IC10EditorPlugin.PauseOnOpen);
-        DrawBoolOption("Collapse when other window is open", IC10EditorPlugin.CollapseOnGameWindow);
-        DrawBoolOption("Enforce 90 Characters per Line Limit", IC10EditorPlugin.EnforceLineLengthLimit);
-        DrawBoolOption("Enforce 128 Lines Limit", IC10EditorPlugin.EnforceLineLimit);
-        DrawBoolOption("Enforce 4096 Bytes Limit", IC10EditorPlugin.EnforceByteLimit);
-        DrawFloatOption("UI Scaling", IC10EditorPlugin.ScaleFactor, 0.25f, 5.0f);
-        DrawIntOption("Line Spacing Offset", IC10EditorPlugin.LineSpacingOffset);
-        DrawFloatOption("Toolitp delay (ms)", IC10EditorPlugin.TooltipDelay);
-        DrawBoolOption("VIM bindings", IC10EditorPlugin.VimBindings);
-        DrawBoolOption(
-            "Auto Completion (insert with Tab key)",
-            IC10EditorPlugin.EnableAutoComplete
-        );
-        DrawBoolOption("Relative line numbers", IC10EditorPlugin.RelativeLineNumbers);
-        DrawBoolOption("Apply patch to keep selected IC10 in computer (Experimental)", IC10EditorPlugin.RestoreSelectedHousing);
-        DrawBoolOption("Enable Version Control", IC10EditorPlugin.EnableVersionControl);
-        ImGui.Checkbox("Show debug window", ref _debugWindowVisible);
-
-        ImGui.Separator();
-        ImGui.NewLine();
-        ImGui.Text("Colors");
-        ImGui.SameLine();
-        if (ImGui.Button("Reload"))
-        {
-            IC10EditorPlugin.Instance.Config.Reload();
-            IC10EditorPlugin.LoadColorConfig();
-        }
-
-        ImGui.TextWrapped(
-                "Color settings can be changed in two ways\n"
-                + "- BepInEx/config/aproposmath-stationeers-ic10-editor.cfg\n"
-                + "\tedit the file and then click the reload button above\n"
-                + "- in the Stationeers Launchpad config menu on game startup\n"
-                + "\n"
-                );
-
-        ImGui.Separator();
-
-        ImGui.TextWrapped(
-            "\nKeyboard Shortcuts:\n"
-                + "\n"
-                + "Arrow Keys            Move caret\n"
-                + "Home/End              Move caret to start/end of line\n"
-                + "Page Up/Down          Move caret up/down by 20 lines\n"
-                + "Shift+Arrow           Select text while moving caret\n"
-                + "Tab                   Autocomplete/Indent\n"
-                + "Ctrl + Q              Quit (no confirm, see note below)\n"
-                + "Ctrl + W              Close tab (only for library code tabs)\n"
-                + "Ctrl + S              Save\n"
-                + "Ctrl + E              Motherboard: Save + export code to ic chip\n"
-                + "Ctrl + E              Library Tab: Apply code to Motherboard tab\n"
-                + "Ctrl + Z              Undo\n"
-                + "Ctrl + Y              Redo\n"
-                + "Ctrl + C              Copy selected code\n"
-                + "Ctrl + V              Paste code from clipboard\n"
-                + "Ctrl + A              Select all code\n"
-                + "Ctrl + X              Cut selected code\n"
-                + "Ctrl + Arrow          Move caret by word\n"
-                + "Ctrl + Click          Open Stationpedia page of word at cursor\n"
-                + "Ctrl + Space          Next tab\n"
-                + "Ctrl + Shift + Space  Previous tab\n"
-                + "Ctrl + Number         Switch to tab <Number>\n\n"
-        );
-
-        ImGui.Separator();
-
-        ImGui.TextWrapped(
-            "\nNotes:\n"
-                + "\n"
-                + "Closing the editor via Ctrl+Q key or Cancel button will not ask for confirmation, BUT you can always reopen the editor and Undo (Ctrl+Z) to get the state before cancelling.\n"
-        );
-
-        ImGui.Separator();
-
-        ImGui.TextWrapped(
-            "\nVIM Mode - Supported Commands:\n"
-                + "\n"
-                + "Movements (with optional number prefix):\n"
-                + "h j, k, l, w, b, 0, $, gg, G, *, #, <C-u>, <C-d>\n\n"
-                + "Editing (with optional number and movement or search):\n"
-                + "i I a A c C d D dd o O x y yy p ~ << >> u <C-r>\n\n"
-                + "Search:\n"
-                + "f t gf\n\n"
-                + "Other:\n"
-                + ". ; n N :w :wq :q\n\n"
-                + "Notes:\n"
-                + "'gf' opens Stationpedia page of hash/name at cursor\n\n"
-                + "'.'  is not working for commands that switch to insert mode\n\n"
-        );
-
-        ImGui.Separator();
-        ImGui.End();
-    }
-
-    public void DrawDebugWindow()
-    {
-        if (!_debugWindowVisible)
-            return;
-
-        using var _ = new ScopedStyleColor(ImGuiCol.WindowBg, Color(0.2f, 0.2f, 0.2f, 1.0f));
-        ImGui.SetNextWindowSize(Scale * new Vector2(600, 400), ImGuiCond.FirstUseEver);
-        ImGui.Begin(
-            "IC10 Debug Window",
-            ref _debugWindowVisible,
-            ImGuiWindowFlags.NoSavedSettings
-        );
-        ImGui.SetWindowFontScale(Mathf.Clamp(Scale, 0.5f, 5.0f));
-
-        double avgRenderTime = 0.0;
-        double maxRenderTime = 0.0;
-
-        foreach (var time in _renderTimes)
-        {
-            avgRenderTime += time;
-            if (time > maxRenderTime)
-                maxRenderTime = time;
-        }
-        if (_renderTimes.Count > 0)
-            avgRenderTime /= _renderTimes.Count;
-
-        avgRenderTime = (avgRenderTime * 1000000.0);
-        maxRenderTime = (maxRenderTime * 1000000.0);
-
-        var e = ActiveEditor;
-
-        ImGui.Text($"Render Time: {avgRenderTime:F0} us avg, {maxRenderTime:F0} us max");
-        ImGui.Text($"ScrollY: {e._scrollY:F2}");
-        ImGui.Text(
-            $"Textpos: {e._textAreaOrigin.x:F2}, {e._textAreaOrigin.y:F2}, {e._textAreaOrigin.y + e._scrollY:F2}"
-        );
-        ImGui.Text($"Textsize: {e._textAreaSize.x:F2}, {e._textAreaSize.y:F2}");
-        ImGui.Text($"CaretPixelPos: {e._caretPixelPos.x:F2}, {e._caretPixelPos.y:F2}");
-        ImGui.Text($"MousePos: {ImGui.GetMousePos().x:F2}, {ImGui.GetMousePos().y:F2}");
-        ImGui.Text(
-            $"Mouse relative to text area: {ImGui.GetMousePos().x - e._textAreaOrigin.x:F2}, {ImGui.GetMousePos().y - (e._textAreaOrigin.y + e._scrollY):F2}"
-        );
-        ImGui.Text($"LineNumberOffset: {ICodeFormatter.LineNumberOffset}");
-        ImGui.Text($"Mouse caret pos: {e.GetTextPositionFromMouse(false)}");
-        var mousePos = ImGui.GetMousePos();
-        float c1 = (mousePos.x - e._textAreaOrigin.x + ImGui.GetStyle().FramePadding.x) / CharWidth;
-        float c2 = c1 - ICodeFormatter.LineNumberOffset;
-        ImGui.Text($"Mouse caret col: {c1}, {c2}");
-        ImGui.Text(
-            $"Mouse line: {(ImGui.GetMousePos().y - e._textAreaOrigin.y) / LineHeight:F2}"
-        );
-        ImGui.Text($"CaretPixelPos: {e._caretPixelPos.x:F2}, {e._caretPixelPos.y:F2}");
-        ImGui.Text($"Font w/h: {CharWidth:F2}, {LineHeight:F2}");
-
-        if (_renderStopwatch != null)
-        {
-            double seconds = _renderStopwatch.Elapsed.TotalSeconds;
-            _renderTimes.Enqueue(seconds);
-            while (_renderTimes.Count > 100)
-                _renderTimes.Dequeue();
-        }
-
-        ImGui.Separator();
-        ImGui.End();
     }
 
 }
