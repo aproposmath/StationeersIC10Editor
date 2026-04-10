@@ -1,3 +1,5 @@
+#nullable enable
+
 using Newtonsoft.Json;
 
 namespace ImGuiEditor.LSP;
@@ -33,8 +35,8 @@ public class VersionedTextDocumentIdentifier : TextDocumentIdentifier
 
 public class Range
 {
-    public Position start { get; set; }
-    public Position end { get; set; }
+    public Position start { get; set; } = new();
+    public Position end { get; set; } = new();
 }
 
 public class Position

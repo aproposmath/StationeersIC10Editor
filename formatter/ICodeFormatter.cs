@@ -412,6 +412,7 @@ public abstract class ICodeFormatter
 
     public virtual void DrawTooltip(Vector2 pos)
     {
+        using var _cbg = new ScopedStyleColor(ImGuiCol.PopupBg, ColorFromVector4(0.1f, 0.1f, 0.2f, 1.0f));
         if (Tooltip == null || Tooltip.Count == 0)
             return;
         ImGui.SetNextWindowSize(

@@ -176,8 +176,8 @@ public class FossilVCS
         }
 
         L.Debug($"\tcommand |{args}| took {sw.ElapsedMilliseconds}ms");
-        L.Debug($"\toutput: {output}");
-        L.Debug($"\terror: {error}");
+        // L.Debug($"\toutput: {output}");
+        // L.Debug($"\terror: {error}");
         return output.ToString();
     }
 
@@ -260,13 +260,13 @@ public class FossilVCS
         foreach (var path in paths)
             arg += $" \"{path}/instruction.xml\"";
 
-        L.Debug($"Adding and committing {paths}, message: {message}");
+        L.Debug($"Adding and committing {arg}, message: {message}");
         if (string.IsNullOrEmpty(message))
             message = $"Update {paths}";
         message = message.Replace("\"", "'");
         await RunAsync($"add {arg}");
         await RunAsync($"commit --no-warnings -m \"{message}\"");
-        await LibrariesWindow.LoadLibraries();
+        await LibraryWindow.LoadScripts();
     }
 
     public static async UniTask<FileState> GetFileState(string path)
@@ -283,6 +283,14 @@ public class FossilVCS
         return FileState.Modified;
     }
 
+
+    private readonly static Dictionary<string, FileState> _StatesMap = new()
+    {
+        { "UNCHANGED", FileState.Unchanged },
+        { "ADDED", FileState.Untracked },
+        { "EDITED", FileState.Modified },
+    };
+
     public static async UniTask<Dictionary<string, FileState>> GetFileStates()
     {
         var result = new Dictionary<string, FileState>();
@@ -294,15 +302,24 @@ public class FossilVCS
 
         foreach (var path in extra.Split('\n'))
             result[GetName(path)] = FileState.Untracked;
+        var missingPaths = new List<string>();
         foreach (var line in ls.Split('\n'))
         {
             // L.Debug($"ls line: |{line}|");
             var trimmed = line.Trim();
             if (string.IsNullOrEmpty(trimmed) || !trimmed.EndsWith("instruction.xml"))
                 continue;
-            var state = trimmed.StartsWith("EDITED ") ? FileState.Modified : FileState.Unchanged;
-            result[GetName(trimmed.Substring(11))] = state;
-            // L.Debug($"File state for {GetName(trimmed.Substring(11))}: {state}");
+            var stateString = trimmed.Substring(0, trimmed.IndexOf(' '));
+            if (stateString == "MISSING")
+                missingPaths.Add(trimmed.Substring(11));
+            else
+                result[GetName(trimmed.Substring(11))] = _StatesMap[stateString];
+        }
+
+        if (missingPaths.Count > 0)
+        {
+            await RunAsync($"rm {string.Join(" ", missingPaths)}");
+            await RunAsync($"commit -m \"Deleted\"");
         }
         return result;
     }
@@ -367,7 +384,7 @@ public class FileVersion
     public string Hash;
     public string Date;
     public string Message;
-    public VersionedLibrary VersionedLibrary;
+    public VersionedScript VersionedScript;
     public InstructionData Library = null;
 
     public async UniTask LoadLibrary()
@@ -390,9 +407,9 @@ public class FileHistoryWindow
     public List<FileVersion> Versions = new List<FileVersion>();
     private Editor _previewEditor;
     public FileVersion SelectedVersion = null;
-    public VersionedLibrary Library;
+    public VersionedScript Library;
 
-    public FileHistoryWindow(VersionedLibrary library)
+    public FileHistoryWindow(VersionedScript library)
     {
         Library = library;
     }
@@ -409,7 +426,7 @@ public class FileHistoryWindow
         var currentVersion = new FileVersion { Hash = "", Path = "", Date = "", Message = "Last saved", Library = Library.Data };
         Versions.Insert(0, currentVersion);
         foreach (var v in Versions)
-            v.VersionedLibrary = Library;
+            v.VersionedScript = Library;
     }
 
     public void Close()
@@ -478,10 +495,7 @@ public class FileHistoryWindow
 
             if (Button("Load", buttonSize, "Load this version into editor", SelectedVersion == null))
             {
-                // if (_tab != null)
-                //     _tab.Editors[0].ResetCode(SelectedVersion.Library.Instructions);
-                // else
-                LibrariesWindow.LoadLibraryEntry(SelectedVersion.VersionedLibrary, SelectedVersion);
+                LibraryWindow.LoadScript(SelectedVersion.VersionedScript, SelectedVersion);
                 IsOpen = false;
             }
         }

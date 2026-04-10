@@ -37,15 +37,24 @@ public static class HelpWindow
         {
             if (ImGui.BeginTabItem("Help", _TabFlags(0)))
             {
+                using var _h = new ScopedChild("");
                 ImGui.TextWrapped(
                     "This is the IC10 Editor. It allows you to edit the source code of IC10 programs with syntax highlighting, undo/redo, and other features."
                 );
 
-                if (Button("Native", buttonSize, "Switch to the native Stationeers IC10 editor."))
-                    LibrariesWindow.Window.SwitchToNativeEditor();
+                ImGui.Text("");
+                ImGui.TextColored(new Vector4(1, 1, 1, 1), "Hints:");
+                ImGui.Text("");
+                ImGui.TextWrapped("- Click on 'Commit' in the Library window to save a version/snapshot of all scripts.");
+                ImGui.TextWrapped("- Right-click on file names/folders in the Library window for actions.");
+                ImGui.TextWrapped("- Files in folders are still kept at the original path on disk (the path is encoded in the Title using '|' as a separator).");
 
+
+                if (Button("Native", buttonSize, "Switch to the native Stationeers IC10 editor."))
+                    LibraryWindow.Window.SwitchToNativeEditor();
+
+                ImGui.EndTabItem();
             }
-            ImGui.EndTabItem();
             if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
                 _tabIndex = 0;
 
@@ -75,6 +84,7 @@ public static class HelpWindow
 
     public static void DrawConfig()
     {
+        using var _ = new ScopedChild("");
         ImGui.Text("\nConfiguration:");
         Config.Bool("Pause Game on Open", IC10EditorPlugin.PauseOnOpen);
         Config.Bool("Collapse when other window is open", IC10EditorPlugin.CollapseOnGameWindow);
@@ -91,9 +101,10 @@ public static class HelpWindow
         );
         Config.Bool("Relative line numbers", IC10EditorPlugin.RelativeLineNumbers);
         Config.Bool("Apply patch to keep selected IC10 in computer (Experimental)", IC10EditorPlugin.RestoreSelectedHousing);
-        Config.Bool("Enable Version Control", IC10EditorPlugin.EnableVersionControl);
-        ImGui.Checkbox("Show debug window", ref DebugWindow.IsOpen);
+        Config.Char("Path Separator", IC10EditorPlugin.PathSeparator);
 
+        ImGui.Separator();
+        ImGui.Checkbox("Show debug window", ref DebugWindow.IsOpen);
         ImGui.Separator();
         ImGui.NewLine();
         ImGui.Text("Colors");
@@ -115,6 +126,7 @@ public static class HelpWindow
 
     public static void DrawKeybindings()
     {
+        using var _ = new ScopedChild("");
         ImGui.TextWrapped(
             "\nKeyboard Shortcuts:\n"
                 + "\n"
@@ -152,6 +164,7 @@ public static class HelpWindow
     }
     public static void DrawVIM()
     {
+        using var _ = new ScopedChild("");
         Config.Bool("VIM bindings enabled", IC10EditorPlugin.VimBindings);
 
         ImGui.TextWrapped(
@@ -205,7 +218,7 @@ public static class DebugWindow
         avgRenderTime = (avgRenderTime * 1000000.0);
         maxRenderTime = (maxRenderTime * 1000000.0);
 
-        var e = LibrariesWindow.Window.ActiveEditor;
+        var e = LibraryWindow.Window.ActiveEditor;
 
         ImGui.Text($"Render Time: {avgRenderTime:F0} us avg, {maxRenderTime:F0} us max");
         ImGui.Text($"ScrollY: {e._scrollY:F2}");

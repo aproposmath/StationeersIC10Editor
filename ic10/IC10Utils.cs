@@ -237,7 +237,7 @@ public class IC10Utils
         {
             if (_registers.Count == 0)
             {
-                for (int i = 0; i < 16; i++)
+                for (int i = 0; i < 18; i++)
                 {
                     _registers.Add($"r{i}");
                     _registers.Add($"rr{i}");
@@ -266,7 +266,7 @@ public class IC10Utils
             {
                 for (int i = 0; i < 6; i++)
                     _devices.Add($"d{i}");
-                for (int i = 0; i < 16; i++)
+                for (int i = 0; i < 18; i++)
                 {
                     _devices.Add($"dr{i}");
                     _devices.Add($"drr{i}");
@@ -359,8 +359,7 @@ public class IC10Utils
                 }
 
                 var keysProp = opcodesObj.GetType().GetProperty("Keys");
-                var opcodes = keysProp?.GetValue(opcodesObj) as IEnumerable<string>;
-                if (opcodes == null)
+                if (keysProp?.GetValue(opcodesObj) is not IEnumerable<string> opcodes)
                     continue;
 
                 var indexer = opcodesObj.GetType().GetProperty("Item");
@@ -376,14 +375,14 @@ public class IC10Utils
                             + " "
                             + opcode
                                 .GetType()
-                                .GetMethod("CommandExample", new[] { typeof(int), typeof(string) })
-                                ?.Invoke(opcode, new object[] { 0, null })
+                                .GetMethod("CommandExample", [typeof(int), typeof(string)])
+                                ?.Invoke(opcode, [0, null])
                         as string;
                     L.Debug($"  Example: {example}");
                     var description =
                         opcode.GetType().GetMethod("Description")?.Invoke(opcode, null) as string;
                     L.Debug($"  Description: {description}");
-                    IC10Utils.Instructions[name] = new IC10OpCode(name, description, example);
+                    Instructions[name] = new IC10OpCode(name, description, example);
                 }
                 break;
             }

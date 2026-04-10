@@ -92,6 +92,12 @@ public class StyledLine : List<Token>
     protected string _content = "";
     public Style Style = new Style();
 
+    public static StyledLine FromString(string text, Style style = default)
+    {
+        var token = new SemanticToken(0, 0, text.Length, 0, style);
+        return new StyledLine(text, [token]);
+    }
+
     public string Text
     {
         get => _content;

@@ -1,19 +1,13 @@
-// todo: ocnfirom window capure keyinput
 namespace StationeersIC10Editor;
 
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 
 using Assets.Scripts;
-using Assets.Scripts.Networking;
-using Assets.Scripts.Networking.Transports;
 using Assets.Scripts.Objects.Motherboards;
 using Assets.Scripts.UI;
-
-using BepInEx.Configuration;
 
 using Cysharp.Threading.Tasks;
 
@@ -39,7 +33,6 @@ public class ConfirmWindow
     public ConfirmWindow(string title, string message, string inputPrompt = null)
     {
         Title = title;
-        ImGui.OpenPopup(title);
         Message = message;
         IsOpen = true;
         InputPrompt = inputPrompt;
@@ -62,6 +55,8 @@ public class ConfirmWindow
 
     public void Draw()
     {
+        if (_justOpened)
+            ImGui.OpenPopup(Title);
         var open = true;
         if (
             ImGui.BeginPopupModal(
@@ -155,80 +150,11 @@ public static class Utils
     }
 }
 
-public static class Settings
-{
-    public static bool VimEnabled => IC10EditorPlugin.VimBindings.Value;
-    public static bool EnforceLineLengthLimit => IC10EditorPlugin.EnforceLineLengthLimit.Value;
-    public static bool EnforceLineLimit => IC10EditorPlugin.EnforceLineLimit.Value;
-    public static bool EnforceByteLimit => IC10EditorPlugin.EnforceByteLimit.Value;
-    public static bool PauseOnOpen => IC10EditorPlugin.PauseOnOpen.Value;
-    public static float TooltipDelay => IC10EditorPlugin.TooltipDelay.Value;
-    public static float Scale => Mathf.Clamp(IC10EditorPlugin.ScaleFactor.Value, 0.25f, 5.0f);
-    public static bool EnableAutoComplete => IC10EditorPlugin.EnableAutoComplete.Value;
-    public static int LineSpacingOffset => IC10EditorPlugin.LineSpacingOffset.Value;
-    public static bool CollapseOnGameWindow => IC10EditorPlugin.CollapseOnGameWindow.Value;
-    public static bool RelativeLineNumbers => IC10EditorPlugin.RelativeLineNumbers.Value;
-    public static bool RestoreSelectedHousing => IC10EditorPlugin.RestoreSelectedHousing.Value;
-    public static bool EnableVersionControl => IC10EditorPlugin.EnableVersionControl.Value && FossilInstaller.IsFossilExeValid;
-
-    public static Vector2 buttonSize => Scale * new Vector2(85, 30);
-    public static Vector2 smallButtonSize => Scale * new Vector2(50, 30);
-
-    public const string LimitExceededMessage = "Size limit exceeded: cannot save or export.";
-
-    private static float _lastScale = -1.0f;
-    private static float _lastLineSpacingOffset = -1.0f;
-    private static float _charWidth = 0.0f;
-    private static float _lineHeight = 0.0f;
-    private static float _lineSpacing = 0.0f;
-    public static float CharWidth => _charWidth;
-    public static float LineHeight => _lineHeight;
-    public static float LineSpacing => _lineSpacing;
-    public static float LineHeightWithSpacing => _lineHeight + _lineSpacing;
-
-    public static void UpdateTextSize()
-    {
-        if (Scale == _lastScale && LineSpacingOffset == _lastLineSpacingOffset)
-            return;
-
-        string s =
-            "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n";
-
-        var size = ImGui.CalcTextSize(s);
-
-        _lineHeight = Mathf.Ceil(size.y / 100.0f + LineSpacingOffset);
-        _charWidth = size.x / 100.0f;
-
-        _lineSpacing =
-            ImGui.GetTextLineHeightWithSpacing()
-            - ImGui.GetTextLineHeight()
-            + LineSpacingOffset;
-        _lastScale = Scale;
-        _lastLineSpacingOffset = LineSpacingOffset;
-    }
-
-    private static Vector2 _lastMousePos = new Vector2(0, 0);
-    private static double _lastMouseMoveTime = 0.0;
-
-    public static bool ShowTooltip = false;
-    public static void Update()
-    {
-        var mousePos = ImGui.GetMousePos();
-        var time = ImGui.GetTime();
-        if (mousePos != _lastMousePos)
-        {
-            _lastMousePos = mousePos;
-            _lastMouseMoveTime = time;
-        }
-        ShowTooltip = time - _lastMouseMoveTime > TooltipDelay / 1000.0f;
-    }
-}
-
 public class Editor
 {
     public object Target;
     public ProgrammableChipMotherboard PCM => Target as ProgrammableChipMotherboard;
-    public VersionedLibrary Library => Target as VersionedLibrary;
+    public VersionedScript Library => Target as VersionedScript;
     bool IsMotherboard => PCM != null;
     public bool EnforceLineLengthLimit => Settings.EnforceLineLengthLimit && IsMotherboard;
     public bool EnforceLineLimit => Settings.EnforceLineLimit && IsMotherboard;
@@ -1053,7 +979,6 @@ public class Editor
 
     public string Save(bool doCommit = false)
     {
-        doCommit = doCommit && EnableVersionControl;
         if (PCM)
         {
             if (LimitExceeded)
@@ -1073,7 +998,7 @@ public class Editor
                 return "No changes to " + (doCommit ? "commit" : "save");
             Library.Data.Instructions = Code;
             Library.Data.SaveToFile(Library.Data.DirectoryPath);
-            Library.UpdateFileState().Forget();
+            LibraryWindow.NeedsReload(Library);
             var msg = $"Library '{Library.Data.Title}' saved.";
             if (doCommit)
             {
@@ -1271,18 +1196,18 @@ public class EditorTab
 {
     public List<Editor> Editors;
     public EditorWindow ParentWindow;
-    public InstructionData Library;
+    public VersionedScript Script;
     public FileHistoryWindow VersionWindow;
 
-    public string Title => Library?.Title ?? "Motherboard";
+    public string Title => Script?.Title ?? "Motherboard";
 
-    public EditorTab(EditorWindow window, Editor editor, VersionedLibrary lib)
+    public EditorTab(EditorWindow window, Editor editor, VersionedScript script = null)
     {
-        Library = lib?.Data;
+        Script = script;
         ParentWindow = window;
         editor.ParentTab = this;
         Editors = new List<Editor> { editor };
-        VersionWindow = new FileHistoryWindow(lib);
+        VersionWindow = new FileHistoryWindow(script);
     }
 
     public int AddEditor(Editor editor)
@@ -1400,7 +1325,7 @@ public class EditorWindow
         }
         ActiveTab.Save();
         if (!IsMotherboard)
-            LibrariesWindow.LoadLibraries().Forget();
+            LibraryWindow.LoadScripts().Forget();
         HideWindow();
     }
 
@@ -1485,7 +1410,7 @@ public class EditorWindow
     public void DrawHeader()
     {
         if (Button($"Library", buttonSize, "Load File from Library (Ctrl+L)"))
-            LibrariesWindow.Open();
+            LibraryWindow.Open();
 
         ImGui.SameLine();
 
@@ -1530,7 +1455,7 @@ public class EditorWindow
             ImGui.SameLine();
 
             if (Button("⟳", smallButtonSize, "Redo (Ctrl+Y)", ActiveEditor.RedoList.Count == 0))
-                ActiveEditor.Undo();
+                ActiveEditor.Redo();
 
             ImGui.SameLine();
             ImGui.SetWindowFontScale(1.0f);
@@ -1711,7 +1636,7 @@ public class EditorWindow
 
         using var _fscale = new ScopedFontScale(Scale);
 
-        LibrariesWindow.Window = this;
+        LibraryWindow.Window = this;
 
         if (DebugWindow.IsOpen)
             DebugWindow.RenderStopwatch = Stopwatch.StartNew();
@@ -1760,7 +1685,7 @@ public class EditorWindow
         if (HasFocus)
             HandleInput(_hasFocus);
 
-        _hasFocus = ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows);
+        _hasFocus = ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) && !ImGui.IsWindowCollapsed();
 
         if (ImGui.BeginTabBar("EditorTabs"))
         {
@@ -1800,7 +1725,7 @@ public class EditorWindow
         ImGui.End();
         ImGui.PopStyleColor();
 
-        LibrariesWindow.Draw();
+        LibraryWindow.Draw();
 
         HelpWindow.Draw();
         DebugWindow.Draw();

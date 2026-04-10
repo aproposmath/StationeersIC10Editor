@@ -691,7 +691,7 @@ public class KeyHandler
                 if (Input.GetKeyDown(KeyCode.Q))
                     _isClosing = true;
                 if (Input.GetKeyDown(KeyCode.L))
-                    LibrariesWindow.Open();
+                    LibraryWindow.Open();
                 if (Input.GetKeyDown(KeyCode.W))
                     Window.CloseTab();
                 for (var i = 0; i <= 9; i++)

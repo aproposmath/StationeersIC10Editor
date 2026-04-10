@@ -25,6 +25,12 @@ public readonly struct ScopedStyleVar : IDisposable
     }
 }
 
+public readonly struct ScopedChild : IDisposable
+{
+    public ScopedChild(string id) { ImGui.BeginChild(id); }
+    public void Dispose() { ImGui.EndChild(); }
+}
+
 public readonly struct ScopedFont : IDisposable
 {
     private readonly bool Apply;
@@ -174,7 +180,6 @@ public class ImGuiUtils
 
     public static bool Button(string label, Vector2 size = default, string tooltip = null, bool disabled = false)
     {
-        // using var _df = new ScopedItemFlag(ImGuiItemFlags.Disabled, disabled, disabled);
         using var _ = new ScopedStyleColor([ImGuiCol.Button, ImGuiCol.ButtonHovered, ImGuiCol.ButtonActive], ICodeFormatter.ColorFromHTML("gray"), disabled);
         var pressed = ImGui.Button(label, size) && !disabled;
 
@@ -230,9 +235,31 @@ public class ImGuiUtils
 
     public static class Config
     {
+        private struct ConfigHelper : IDisposable
+        {
+            ConfigEntryBase _entry;
+
+            public ConfigHelper(ConfigEntryBase entry)
+            {
+                _entry = entry;
+                if (Button($"D##{_entry.Definition.Key}", new Vector2(), "Reset to default"))
+                {
+                    L.Debug($"Resetting {_entry.BoxedValue} to default ({_entry.DefaultValue})");
+                    _entry.BoxedValue = _entry.DefaultValue;
+                }
+                ImGui.SameLine();
+            }
+
+            public readonly void Dispose()
+            {
+                if (ImGui.IsItemHovered() && Settings.ShowTooltip)
+                    ImGui.SetTooltip(_entry.Description.Description);
+            }
+        }
 
         public static void Bool(string label, ConfigEntry<bool> entry)
         {
+            using var _ = new ConfigHelper(entry);
             var value = entry.Value;
             if (ImGui.Checkbox(label, ref value))
                 entry.BoxedValue = value;
@@ -242,20 +269,16 @@ public class ImGuiUtils
 
         public static void Float(string label, ConfigEntry<float> entry, float min, float max)
         {
+            using var _ = new ConfigHelper(entry);
             var value = entry.Value;
 
             if (InputFloat(label, ref value, FloatOptionWidth))
                 entry.BoxedValue = value;
-            ImGui.SameLine();
-            if (ImGui.Button("Reset"))
-            {
-                entry.BoxedValue = 1.0f;
-                value = 1.0f;
-            }
         }
 
         public static void Float(string label, ConfigEntry<float> entry)
         {
+            using var _ = new ConfigHelper(entry);
             var value = entry.Value;
             if (InputFloat(label, ref value, FloatOptionWidth))
                 entry.BoxedValue = value;
@@ -263,9 +286,18 @@ public class ImGuiUtils
 
         public static void Int(string label, ConfigEntry<int> entry)
         {
+            using var _ = new ConfigHelper(entry);
             var value = entry.Value;
             if (InputInt(label, ref value, FloatOptionWidth, -20, 20))
                 entry.BoxedValue = value;
+        }
+
+        public static void Char(string label, ConfigEntry<string> entry)
+        {
+            using var _ = new ConfigHelper(entry);
+            var value = $"{entry.Value}";
+            if (InputText(label, ref value, 2 * Settings.CharWidth))
+                entry.BoxedValue = value.Length > 0 ? $"{value[0]}" : entry.DefaultValue;
         }
 
     }

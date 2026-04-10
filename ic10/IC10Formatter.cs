@@ -21,6 +21,7 @@ public class IC10CodeFormatter : StaticFormatter
     private Dictionary<string, int> devAliases = new Dictionary<string, int>();
     private Dictionary<string, int> labels = new Dictionary<string, int>();
     private HashSet<string> _tokensToUpdate = new HashSet<string>();
+    private bool _showRegisterUsage = false;
 
     public static double MatchingScore(string input)
     {
@@ -178,7 +179,17 @@ public class IC10CodeFormatter : StaticFormatter
             string error = null;
 
             if (IC10Utils.IsBuiltin(txt))
+            {
                 dt = IC10Utils.Types[txt];
+                if (IC10Utils.IsHashExpression(txt))
+                {
+                    // dt = DataType.Number;
+                    t.Tooltip =
+                    [
+                        StyledLine.FromString("Ctrl+Click to open Stationpedia", ColorFromHTML("#A0A0A0")),
+                    ];
+                }
+            }
             else if (txt.EndsWith(":"))
                 dt = DataType.Label;
             else if (types.TryGetValue(txt, out DataType type))
@@ -191,11 +202,12 @@ public class IC10CodeFormatter : StaticFormatter
                     string prefabName = IC10Utils.GetLogicablePrefabName(txt);
                     if (prefabName != null)
                     {
-                        var tooltip = new StyledText();
-                        var ttLine = new StyledLine(prefabName);
-                        ttLine.Add(new Token(0, prefabName, ColorFromHTML("#00ff00")));
-                        tooltip.Add(ttLine);
-                        t.Tooltip = tooltip;
+                        t.Tooltip =
+                        [
+                            StyledLine.FromString(prefabName, ColorFromHTML("#00ff00")),
+                            StyledLine.FromString(""),
+                            StyledLine.FromString("Ctrl+Click to open Stationpedia", ColorFromHTML("#A0A0A0")),
+                        ];
                     }
                 }
             }
@@ -558,28 +570,43 @@ public class IC10CodeFormatter : StaticFormatter
         }
     }
 
-    private bool[] _registerUsage = new bool[16];
+    private int[] _registerUsage = new int[18];
+    private int[] _registerUsageAlias = new int[18];
 
     private void UpdateRegisterUsage()
     {
-        for (int i = 0; i < 16; i++)
-            _registerUsage[i] = false;
+        for (int i = 0; i < 18; i++)
+        {
+            _registerUsage[i] = 0;
+            _registerUsageAlias[i] = 0;
+        }
 
-        foreach (var line in Lines)
+        foreach (IC10Line line in Lines)
             foreach (var token in line)
-                if (IC10Utils.Registers.Contains(token.Text) && token.Text.StartsWith("r") && token.Text != "ra")
+                if (IC10Utils.Registers.Contains(token.Text))
                 {
                     var reg = token.Text;
                     while (reg.StartsWith("rr") && reg.Length > 2)
                         reg = reg.Substring(1);
-                    if (int.TryParse(reg.Substring(1), out int regNum))
+                    var regNum = -1;
+                    if (reg == "sp")
+                        regNum = 16;
+                    else if (reg == "ra")
+                        regNum = 17;
+                    else if (int.TryParse(reg.Substring(1), out int parsed))
+                        regNum = parsed;
+                    else L.Warning($"Failed to parse register number: {reg}");
+                    if (regNum != -1)
                     {
-                        if (regNum >= 0 && regNum < 16)
-                            _registerUsage[regNum] = true;
+                        if (regNum >= 0 && regNum < 18)
+                        {
+                            if (line.IsAlias)
+                                _registerUsageAlias[regNum]++;
+                            else
+                                _registerUsage[regNum]++;
+                        }
                         else L.Warning($"Register number out of range: {reg}");
                     }
-                    else L.Warning($"Failed to parse register number: {reg}");
-                    _registerUsage[int.Parse(reg.Substring(1))] = true;
                 }
     }
 
@@ -592,35 +619,63 @@ public class IC10CodeFormatter : StaticFormatter
     public override void DrawButtons()
     {
         if (ImGui.Button("Minify", Settings.buttonSize))
-            Editor.ResetCode(IC10.IC10Utils.Minify(Lines));
+            Editor.ResetCode(IC10Utils.Minify(Lines));
+        ImGui.SameLine();
+        ImGuiUtils.Checkbox("Registers", ref _showRegisterUsage, "Show register usage");
     }
 
 
     public void DrawRegisterUsage()
     {
-
+        if (!_showRegisterUsage) return;
         var drawList = ImGui.GetWindowDrawList();
 
-        Vector2 startPos = ImGui.GetCursorScreenPos();
-        Vector2 windowSize = ImGui.GetWindowSize();
+        var startPos = ImGui.GetCursorScreenPos();
 
-        Vector2 rectSize = new Vector2(9, 9) * Settings.Scale;
-        float spacing = 4.0f * Settings.Scale;
+        var width = Settings.CharWidth * 7.0f;
+        var height = (18 + 4 * 0.5f) * Settings.LineHeightWithSpacing;
 
-        startPos.x = ImGui.GetWindowPos().x + ImGui.GetWindowWidth() - 3 * Settings.buttonSize.x - ImGui.GetStyle().FramePadding.x * 3 - ImGui.GetStyle().ItemSpacing.x;
-        startPos.y += 8.0f;
+        startPos.x = ImGui.GetWindowPos().x + ImGui.GetWindowWidth() - width - ImGui.GetStyle().FramePadding.x - ImGui.GetStyle().ItemSpacing.x * 5;
+        startPos.y -= 1.5f * Settings.buttonSize.y + height;
 
-        uint colorUsed = ImGui.GetColorU32(new Vector4(1.0f, 1.0f, 0.0f, 1.0f));
-        uint colorFree = ImGui.GetColorU32(new Vector4(0.0f, 1.0f, 0.0f, 1.0f));
+        var colorUsed4 = new Vector4(1.0f, 1.0f, 0.0f, 1.0f);
+        var colorFree4 = new Vector4(0.0f, 1.0f, 0.0f, 1.0f);
+        var colorWarn4 = new Vector4(1.0f, 0.5f, 0.0f, 1.0f);
+        var colorUsed = ImGui.GetColorU32(colorUsed4);
+        var colorFree = ImGui.GetColorU32(colorFree4);
+        var colorWarn = ImGui.GetColorU32(colorWarn4);
 
-        float x0 = startPos.x;
 
-        for (int i = 0; i < 16; i++)
+        var mousePos = ImGui.GetMousePos();
+        if (Settings.ShowTooltip && mousePos.x >= startPos.x && mousePos.x <= startPos.x + width && mousePos.y >= startPos.y && mousePos.y <= startPos.y + height)
         {
-            uint color = _registerUsage[i] ? colorUsed : colorFree;
-            int xShift = i + i / 4; // add extra space every 4 registers
-            startPos.x = x0 + xShift * (rectSize.x + spacing);
-            drawList.AddCircleFilled(startPos + rectSize / 2, rectSize.x / 2, color, 12);
+            ImGui.BeginTooltip();
+            ImGui.Text($"Register Usage (direct and as alias)");
+            ImGui.Text($"Colors:");
+            ImGui.TextColored(colorFree4, "  Free");
+            ImGui.TextColored(colorUsed4, "  Used: direct or alias");
+            ImGui.TextColored(colorWarn4, "  Warn: direct + alias or multiple aliases");
+            ImGui.EndTooltip();
+        }
+
+        for (var i = 0; i < 18; i++)
+        {
+            var numAlias = _registerUsageAlias[i];
+            var numUse = _registerUsage[i];
+            var color = numUse + numAlias > 0 ? colorUsed : colorFree;
+            if (numAlias > 1 || numAlias > 0 && numUse > 0)
+                color = colorWarn;
+
+            var shift = new Vector2(Settings.CharWidth, 0);
+            var strNumUse = numUse > 0 ? $"{numUse}".PadLeft(2) : " .";
+            var strNumAlias = numAlias > 0 ? $"{numAlias}".PadLeft(2) : " .";
+            var strReg = $"r{i}";
+            if (i == 16) strReg = "sp";
+            if (i == 17) strReg = "ra";
+            drawList.AddText(startPos, color, strReg);
+            drawList.AddText(startPos + 3 * shift, color, strNumUse);
+            drawList.AddText(startPos + 5 * shift, color, strNumAlias);
+            startPos.y += Settings.LineHeightWithSpacing * (i % 4 == 3 ? 1.5f : 1);
         }
     }
 }

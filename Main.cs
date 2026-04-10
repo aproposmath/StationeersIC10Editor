@@ -28,8 +28,7 @@ public class IC10EditorPlugin : BaseUnityPlugin
     public static ConfigEntry<bool> CollapseOnGameWindow;
     public static ConfigEntry<bool> RelativeLineNumbers;
     public static ConfigEntry<bool> RestoreSelectedHousing;
-
-    public static ConfigEntry<bool> EnableVersionControl;
+    public static ConfigEntry<string> PathSeparator;
 
     public static Dictionary<string, ConfigEntry<string>> Colors = new();
     public static IC10EditorPlugin Instance { get; private set; }
@@ -127,12 +126,11 @@ public class IC10EditorPlugin : BaseUnityPlugin
             false,
             "Patch the game code to restore the last selected housing on the computer on load/network changes"
         );
-
-        EnableVersionControl = Config.Bind(
+        PathSeparator = Config.Bind(
             "General",
-            "EnableVersionControl",
-            false,
-            "Enable version control (Fossil)"
+            "PathSeparator",
+            "|",
+            "Path separator character to manage folders without changing the file location on disk\nOnly change this if you need to and really know what you are doing\nThis does NOT rename scripts automatically to reflect the path separator change"
         );
 
         foreach (var kv in ColorDefaults)
