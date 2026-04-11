@@ -92,12 +92,14 @@ public class VersionedScript(InstructionData data)
             sb.AppendLine($"Version Status: {State}");
             sb.AppendLine($"Description:    {Data.Description}");
             sb.AppendLine($"\nRight click for more options");
-            if(State == FileState.Untracked){
+            if (State == FileState.Untracked)
+            {
                 sb.AppendLine("");
                 sb.AppendLine("This script is not tracked by version control yet!");
                 sb.AppendLine("Consider clicking 'Commit All' at the top right to make a snapshot of all scripts.");
             }
-            if(State == FileState.Modified){
+            if (State == FileState.Modified)
+            {
                 sb.AppendLine("");
                 sb.AppendLine("This script has changed since the last version");
             }
@@ -267,7 +269,7 @@ public class LibNode
                 LibraryWindow.Rename(this);
             if (IsScript)
             {
-                if (Script.State!= FileState.Unchanged && ImGui.Selectable("Commit"))
+                if (Script.State != FileState.Unchanged && ImGui.Selectable("Commit"))
                     LibraryWindow.Commit(this);
                 if (ImGui.Selectable("History"))
                     LibraryWindow.OpenHistory(this);

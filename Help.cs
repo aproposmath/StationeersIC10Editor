@@ -94,7 +94,8 @@ public static class HelpWindow
         Config.Float("UI Scaling", IC10EditorPlugin.ScaleFactor, 0.25f, 5.0f);
         Config.Int("Line Spacing Offset", IC10EditorPlugin.LineSpacingOffset);
         Config.Float("Toolitp delay (ms)", IC10EditorPlugin.TooltipDelay);
-        Config.Bool("VIM bindings", IC10EditorPlugin.VimBindings);
+        if (Config.Bool("VIM bindings enabled", IC10EditorPlugin.VimBindings) && !VimEnabled)
+            LibraryWindow.Window.ActiveEditor.KeyHandler.Mode = KeyMode.Insert;
         Config.Bool(
             "Auto Completion (insert with Tab key)",
             IC10EditorPlugin.EnableAutoComplete
@@ -165,7 +166,8 @@ public static class HelpWindow
     public static void DrawVIM()
     {
         using var _ = new ScopedChild("");
-        Config.Bool("VIM bindings enabled", IC10EditorPlugin.VimBindings);
+        if (Config.Bool("VIM bindings enabled", IC10EditorPlugin.VimBindings) && !VimEnabled)
+            LibraryWindow.Window.ActiveEditor.KeyHandler.Mode = KeyMode.Insert;
 
         ImGui.TextWrapped(
             "\nVIM Mode - Supported Commands:\n"

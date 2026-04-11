@@ -257,12 +257,16 @@ public class ImGuiUtils
             }
         }
 
-        public static void Bool(string label, ConfigEntry<bool> entry)
+        public static bool Bool(string label, ConfigEntry<bool> entry)
         {
             using var _ = new ConfigHelper(entry);
             var value = entry.Value;
             if (ImGui.Checkbox(label, ref value))
+            {
                 entry.BoxedValue = value;
+                return true;
+            }
+            return false;
         }
 
         public static float FloatOptionWidth => ImGui.CalcTextSize("000000.00").x;
