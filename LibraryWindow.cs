@@ -256,7 +256,7 @@ public class LibNode
 
         var isOpen = treeView && ImGui.TreeNodeEx(imguiLabel, flags);
         if (!treeView && IsScript)
-            ImGui.Selectable(" " + FullName.Replace("|", "/"), isSelected);
+            ImGui.Selectable("  " + FullName.Replace("|", "/"), isSelected);
 
         if (ImGui.BeginPopupContextItem())
         {
@@ -320,9 +320,9 @@ public class LibNode
         {
             var radius = 5.0f; ;
             var imSize = 0.9f * LineHeight;
-            var imPos = ImGui.GetCursorScreenPos() - new Vector2(0, 0.6f * LineHeight);
+            var imPos = ImGui.GetCursorScreenPos() + new Vector2(0.8f*CharWidth, -0.6f * LineHeight);
 
-            if (Script.State == FileState.Workshop)
+            if (Script.State == FileState.Workshop || isSelected)
             {
                 var texPtr = ImGuiManager.ImGuiPointerFor(WorkshopMenu.Instance.SteamImage.texture);
                 imPos -= new Vector2(imSize / 2, 0.01f * LineHeight + 0.5f * imSize);
@@ -913,8 +913,6 @@ public static class LibraryWindow
         {
             if (_treeView)
                 ImGui.Unindent(10.0f);
-            else
-                ImGui.Indent(5.0f);
             Root.Draw(_treeView);
         }
     }
