@@ -254,9 +254,10 @@ public class LibNode
         if (FullName == "")
             flags |= ImGuiTreeNodeFlags.DefaultOpen;
 
-        var isOpen = treeView && ImGui.TreeNodeEx(imguiLabel, flags);
         if (!treeView && IsScript)
             ImGui.Selectable("  " + FullName.Replace("|", "/"), isSelected);
+
+        var isOpen = treeView && ImGui.TreeNodeEx(imguiLabel, flags);
 
         if (ImGui.BeginPopupContextItem())
         {
@@ -320,7 +321,9 @@ public class LibNode
         {
             var radius = 5.0f; ;
             var imSize = 0.9f * LineHeight;
-            var imPos = ImGui.GetCursorScreenPos() + new Vector2(0.8f*CharWidth, -0.6f * LineHeight);
+            var imPos = ImGui.GetCursorScreenPos() - new Vector2(0, 0.6f * LineHeight);
+            if (!treeView)
+                imPos.x += 0.8f * CharWidth;
 
             if (Script.State == FileState.Workshop || isSelected)
             {
