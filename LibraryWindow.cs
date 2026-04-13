@@ -55,7 +55,7 @@ public class VersionedScript(InstructionData data)
             L.Warning($"File state not found for library: {Data.DirectoryPath.Name}");
     }
 
-    public async UniTaskVoid UpdateFileState()
+    public async UniTask UpdateFileState()
     {
         L.Debug($"Updating file state for library: {Data.DirectoryPath.Name}, State: {State}");
         State = await FossilVCS.GetFileState(Data.DirectoryPath.Name + "/instruction.xml");
@@ -654,11 +654,16 @@ public static class LibraryWindow
         {
             var msg = _confirmWindow.UserInput;
             script.Save();
-            FossilVCS.AddAndCommit([script.Data.DirectoryPath.Name], _confirmWindow.UserInput).ContinueWith(() =>
-            {
-                NeedsReload(node.Script);
-            });
+            CommitAsync(script, msg).Forget();
         };
+    }
+
+    public static async UniTask CommitAsync(VersionedScript script, string msg)
+    {
+        await UniTask.SwitchToThreadPool();
+        await FossilVCS.AddAndCommit([script.Data.DirectoryPath.Name], msg);
+        await UniTask.SwitchToMainThread();
+        NeedsReload(script);
     }
 
     public static void Copy(LibNode node)

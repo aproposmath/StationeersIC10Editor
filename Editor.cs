@@ -997,33 +997,31 @@ public class Editor
             if (noChanges)
                 return "No changes to " + (doCommit ? "commit" : "save");
             Library.Data.Instructions = Code;
-            Library.Data.SaveToFile(Library.Data.DirectoryPath);
+            Library.Save();
             LibraryWindow.NeedsReload(Library);
-            var msg = $"Library '{Library.Data.Title}' saved.";
             if (doCommit)
             {
                 _confirmWindow = new ConfirmWindow($"Commit {Library.Data.Title}", null, "Message");
-                _confirmWindow.OnConfirm = () =>
-                {
-                    try
-                    {
-                        FossilVCS.AddAndCommit([Library.Data.DirectoryPath.Name], _confirmWindow.UserInput).ContinueWith(() =>
-                        {
-                            Library.State = FileState.Unchanged;
-                            KeyHandler.CommandStatus = $"Version saved: {_confirmWindow.UserInput}";
-                        });
-                    }
-                    catch (Exception ex)
-                    {
-                        msg = $"Failed to commit: {ex.Message}";
-                        L.Error(ex.Message);
-                        L.Error(ex.StackTrace);
-                    }
-                };
+                _confirmWindow.OnConfirm = () => CommitAsync(Library, _confirmWindow.UserInput).Forget();
             }
-            return msg;
+            return $"Library '{Library.Data.Title}' saved.";
         }
         return "Error: No target to save to.";
+    }
+
+    public async UniTask CommitAsync(VersionedScript script, string message)
+    {
+        try
+        {
+            await LibraryWindow.CommitAsync(script, message);
+            KeyHandler.CommandStatus = $"Version saved: {message}";
+        }
+        catch (Exception ex)
+        {
+            KeyHandler.CommandStatus = $"Failed to commit: {ex.Message}";
+            L.Error(ex.Message);
+            L.Error(ex.StackTrace);
+        }
     }
 
     public void Update()
