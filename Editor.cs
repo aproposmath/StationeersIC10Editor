@@ -1296,7 +1296,7 @@ public class EditorWindow
 
     public EditorWindow(ProgrammableChipMotherboard pcm)
     {
-        KeyHandler = new KeyHandler(this);
+        KeyHandler = new KeyHandler(this) { Mode = VimEnabled ? KeyMode.VimNormal : KeyMode.Insert };
         Tabs.Add(new EditorTab(this, new Editor(KeyHandler, pcm), null));
     }
 
