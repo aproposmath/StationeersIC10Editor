@@ -993,9 +993,9 @@ public class Editor
         {
             var noChanges = Library.Data.Instructions == Code;
             if (doCommit)
-                noChanges = noChanges && (Library.State != FileState.Untracked) && (Library.State != FileState.Modified);
+                noChanges = noChanges && (Library.State == FileState.Unchanged);
             if (noChanges)
-                return "No changes to " + (doCommit ? "commit" : "save");
+                return "No changes to " + (doCommit ? "commit" : "save") + $" state: {Library.State}";
             Library.Data.Instructions = Code;
             Library.Save();
             LibraryWindow.NeedsReload(Library);
@@ -1194,18 +1194,19 @@ public class EditorTab
 {
     public List<Editor> Editors;
     public EditorWindow ParentWindow;
-    public VersionedScript Script;
+    public string FilePath;
+    public VersionedScript Script => FilePath != null ? LibraryWindow.VersionedScriptsByPath[FilePath] : null;
     public FileHistoryWindow VersionWindow;
 
     public string Title => Script?.Title ?? "Motherboard";
 
-    public EditorTab(EditorWindow window, Editor editor, VersionedScript script = null)
+    public EditorTab(EditorWindow window, Editor editor, string filePath = null)
     {
-        Script = script;
+        FilePath = filePath;
         ParentWindow = window;
         editor.ParentTab = this;
         Editors = new List<Editor> { editor };
-        VersionWindow = new FileHistoryWindow(script);
+        VersionWindow = new FileHistoryWindow(Script);
     }
 
     public int AddEditor(Editor editor)

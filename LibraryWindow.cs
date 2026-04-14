@@ -1,5 +1,3 @@
-// todo: fix drag and drop
-// todo: check rename
 namespace StationeersIC10Editor;
 
 using System;
@@ -194,9 +192,8 @@ public class LibNode
     {
         if (Script != null)
         {
-            var sw = System.Diagnostics.Stopwatch.StartNew();
             InputSourceCode.DeleteInstruction(Script.Data.DirectoryPath.Name);
-            L.Debug($"Delete: {FullName} took {sw.ElapsedMilliseconds}ms");
+            LibraryWindow.Window.CloseTab(LibraryWindow.GetTabIndexForScript(Script));
         }
         if (IsFolder)
             LibraryWindow.Folders.Remove(FullName);
@@ -325,7 +322,7 @@ public class LibNode
             if (!treeView)
                 imPos.x += 0.8f * CharWidth;
 
-            if (Script.State == FileState.Workshop || isSelected)
+            if (Script.State == FileState.Workshop)
             {
                 var texPtr = ImGuiManager.ImGuiPointerFor(WorkshopMenu.Instance.SteamImage.texture);
                 imPos -= new Vector2(imSize / 2, 0.01f * LineHeight + 0.5f * imSize);
@@ -378,6 +375,7 @@ public static class LibraryWindow
 {
     public static bool IsOpen = false;
     public static List<VersionedScript> VersionedScripts = [];
+    public static Dictionary<string, VersionedScript> VersionedScriptsByPath = [];
     public static LibNode Root = null;
 
     public static List<VersionedScript> _SearchResults = [];
@@ -555,12 +553,9 @@ public static class LibraryWindow
             LoadScripts().Forget();
         }
 
-        if (_scriptsToReload.Count > 0)
-        {
-            foreach (var script in _scriptsToReload)
-                script.UpdateFileState().Forget();
-            _scriptsToReload.Clear();
-        }
+        foreach (var script in _scriptsToReload)
+            script.UpdateFileState().Forget();
+        _scriptsToReload.Clear();
     }
 
     public static void CommitAll()
@@ -701,7 +696,7 @@ public static class LibraryWindow
         _confirmWindow = new ConfirmWindow($"Delete {type}: {node.Name}", msg);
         _confirmWindow.OnConfirm = () =>
         {
-            // temporarily disable vanilla scripts reloading while deleting files
+            // temporarily disable vanilla scripts reloading while deleting files (this takes a looong time otherwise...)
             var helpWindow = ScriptHelpWindow.ScriptLibraryWindow;
             var helpMode = helpWindow.HelpMode;
             helpWindow.HelpMode = HelpMode.None;
@@ -767,6 +762,9 @@ public static class LibraryWindow
         L.Debug($"\tLoaded {sw.ElapsedMilliseconds}ms");
         await UniTask.SwitchToMainThread();
         VersionedScripts = libs;
+        VersionedScriptsByPath.Clear();
+        foreach (var script in VersionedScripts)
+            VersionedScriptsByPath[script.Path] = script;
 
         Search();
         L.Debug($"\tSearched {sw.ElapsedMilliseconds}ms");
@@ -854,6 +852,15 @@ public static class LibraryWindow
         Root.UpdateCount();
     }
 
+    public static int GetTabIndexForScript(VersionedScript lib)
+    {
+        for (var i = 0; i < Window.Tabs.Count; i++)
+            if (Window.Tabs[i].FilePath == lib.Path)
+                return i;
+
+        return -1;
+    }
+
     public static int LoadScript(VersionedScript lib, FileVersion version = null)
     {
         if (lib == null)
@@ -869,30 +876,23 @@ public static class LibraryWindow
             return 0;
         }
 
-        var tabs = Window.Tabs;
-
-        foreach (var tab in tabs)
+        var tabIndex = GetTabIndexForScript(lib);
+        if (tabIndex >= 0)
         {
-            if (tab.Script == null)
-                continue;
-            if (tab.Script.Path == lib.Path)
-            {
-                L.Info($"Library {lib.Path} already open, switching to tab");
-                var index = tabs.IndexOf(tab);
-                Window.SetTab(index);
-                tab.Editors[0].ResetCode(code);
-                IsOpen = false;
-                return index;
-            }
+            L.Debug($"Library {lib.Path} already open, switching to tab");
+            Window.SetTab(tabIndex);
+            Window.Tabs[tabIndex].Editors[0].ResetCode(code);
+            IsOpen = false;
+            return tabIndex;
         }
 
-        var numTabsBefore = tabs.Count;
+        var numTabsBefore = Window.Tabs.Count;
 
         try
         {
             var editor = new Editor(Window.ActiveEditor.KeyHandler, lib);
             editor.ResetCode(code);
-            Window.Tabs.Add(new EditorTab(Window, editor, lib));
+            Window.Tabs.Add(new EditorTab(Window, editor, lib.Path));
             Window.SetTab(Window.Tabs.Count - 1);
             IsOpen = false;
             return Window.Tabs.Count - 1;
