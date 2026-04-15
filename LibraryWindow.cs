@@ -585,7 +585,7 @@ public static class LibraryWindow
         _confirmWindow.OnConfirm = () =>
         {
             var name = LibNode.Combine(prefix, _confirmWindow.UserInput);
-            L.Warning($"Create Folder: {name}, not implemented!");
+            // L.Warning($"Create Folder: {name}, not implemented!");
             Folders.Add(name);
             NeedsUpdate();
         };
@@ -655,7 +655,7 @@ public static class LibraryWindow
 
     public static async UniTask CommitAsync(VersionedScript script, string msg)
     {
-        await UniTask.SwitchToThreadPool();
+        // await UniTask.SwitchToThreadPool();
         await FossilVCS.AddAndCommit([script.Data.DirectoryPath.Name], msg);
         await UniTask.SwitchToMainThread();
         NeedsReload(script);
@@ -729,14 +729,15 @@ public static class LibraryWindow
 
     public static async UniTask LoadScripts()
     {
-        await UniTask.SwitchToThreadPool();
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var items = await NetworkManager.GetLocalAndWorkshopItems(
             SteamTransport.WorkshopType.ICCode
         );
         L.Debug($"\tGet {sw.ElapsedMilliseconds}ms");
 
+        // await UniTask.SwitchToThreadPool();
         var fileStates = await FossilVCS.GetFileStates();
+        await UniTask.SwitchToMainThread();
         L.Debug($"\tFileStates {sw.ElapsedMilliseconds}ms");
 
         var libs = new List<VersionedScript>();
@@ -760,7 +761,6 @@ public static class LibraryWindow
         libs.Sort((a, b) => a.Data.Title.ToLowerInvariant().CompareTo(b.Data.Title.ToLowerInvariant()));
 
         L.Debug($"\tLoaded {sw.ElapsedMilliseconds}ms");
-        await UniTask.SwitchToMainThread();
         VersionedScripts = libs;
         VersionedScriptsByPath.Clear();
         foreach (var script in VersionedScripts)

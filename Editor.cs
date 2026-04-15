@@ -1195,7 +1195,7 @@ public class EditorTab
     public List<Editor> Editors;
     public EditorWindow ParentWindow;
     public string FilePath;
-    public VersionedScript Script => FilePath != null ? LibraryWindow.VersionedScriptsByPath[FilePath] : null;
+    public VersionedScript Script => FilePath != null && LibraryWindow.VersionedScriptsByPath.ContainsKey(FilePath) ? LibraryWindow.VersionedScriptsByPath[FilePath] : null;
     public FileHistoryWindow VersionWindow;
 
     public string Title => Script?.Title ?? "Motherboard";

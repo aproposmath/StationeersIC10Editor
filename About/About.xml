@@ -4,7 +4,7 @@
   <Author>aproposmath</Author>
   <ModID>com.github.aproposmath.StationeersIC10Editor</ModID>
   <WorkshopHandle>3592775931</WorkshopHandle>
-  <Version>0.9.3</Version>
+  <Version>0.9.4</Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
 
@@ -34,16 +34,9 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        0.9.3:
+        0.9.4:
 
-        - Version control for local scripts (based on fossil)
-        - Folder management for local scripts
-        - Automated backups of all local scripts on game start (stored in GameDir/BepInEx/cache/ic10editor/backups)
-        - More tooltips, show keybindings in button tooltips
-        - Library tabs now export directly to chip (bypassing the motherboard tab)
-        - Lots of internal code refactoring
-        - Fix bug: AltGr+3 does not trigger Ctrl+3 anymore
-        - Possibly fix unusable libraries due to loading bug
+        - Run VSC tool and library loading from the main thread (possibly fixes issues experienced by some users)
 
   </ChangeLog>
   <Tags>

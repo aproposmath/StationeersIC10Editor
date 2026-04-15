@@ -119,7 +119,7 @@ public class FossilVCS
     {
         L.Debug($"Running Fossil command: \"{args}\" at \"{ScriptsDir}\"");
         var sw = Stopwatch.StartNew();
-        await UniTask.SwitchToThreadPool();
+        // await UniTask.SwitchToThreadPool();
         var psi = new ProcessStartInfo
         {
             FileName = FossilInstaller.FossilExe,
