@@ -312,13 +312,18 @@ public class FossilVCS
             var stateString = trimmed.Substring(0, trimmed.IndexOf(' '));
             if (stateString == "MISSING")
                 missingPaths.Add(trimmed.Substring(11));
-            else
-                result[GetName(trimmed.Substring(11))] = _StatesMap[stateString];
+            else if (_StatesMap.TryGetValue(stateString, out var state))
+                result[GetName(trimmed.Substring(11))] = state;
+            else if (stateString != "DELETED")
+                L.Warning($"Unknown fossil state state: {stateString}");
         }
 
         if (missingPaths.Count > 0)
         {
-            await RunAsync($"rm {string.Join(" ", missingPaths)}");
+            var arg = "";
+            foreach (var path in missingPaths)
+                arg += $" \"{path}\"";
+            await RunAsync($"rm {arg}");
             await RunAsync($"commit -m \"Deleted\"");
         }
         return result;
@@ -446,58 +451,55 @@ public class FileHistoryWindow
             return;
         using var _ = new ScopedStyleVar(ImGuiStyleVar.FrameRounding, 2.0f);
         ImGui.SetNextWindowSize(new Vector2(1300, 800), ImGuiCond.FirstUseEver);
-        if (
-            ImGui.Begin($"Version History: {Library.Data.Title}", ref IsOpen, ImGuiWindowFlags.NoSavedSettings)
-        )
+        Settings.SetImGuiWindowCollapsed();
+        ImGui.Begin($"Version History: {Library.Data.Title}", ref IsOpen, ImGuiWindowFlags.NoSavedSettings);
+        using (new Pane("Versions", 0.4f, -1))
         {
-            using (new Pane("Versions", 0.4f, -1))
+            foreach (var version in Versions)
             {
-                foreach (var version in Versions)
+                if (ImGui.Selectable(version.Label, SelectedVersion == version) && SelectedVersion != version)
                 {
-                    if (ImGui.Selectable(version.Label, SelectedVersion == version) && SelectedVersion != version)
+                    SelectedVersion = version;
+                    if (_previewEditor == null)
                     {
-                        SelectedVersion = version;
-                        if (_previewEditor == null)
-                        {
-                            _previewEditor = new Editor(null, Library);
-                            _previewEditor.IsReadOnly = true;
-                        }
-                        _previewEditor.ResetCode("# Loading version...", false);
-                        LoadVersionCode(version).Forget();
+                        _previewEditor = new Editor(null, Library);
+                        _previewEditor.IsReadOnly = true;
                     }
+                    _previewEditor.ResetCode("# Loading version...", false);
+                    LoadVersionCode(version).Forget();
                 }
             }
+        }
 
-            ImGui.SameLine();
+        ImGui.SameLine();
 
-            using (new Pane("LibrarySearchPreview", 1.0f, -1))
+        using (new Pane("LibrarySearchPreview", 1.0f, -1))
+        {
+            if (_previewEditor != null)
             {
-                if (_previewEditor != null)
-                {
-                    _previewEditor.Update();
-                    using var __ = new ScopedStyleVar(ImGuiStyleVar.ChildBorderSize, 0);
-                    _previewEditor.Draw(
-                        ImGui.GetCursorScreenPos(),
-                        ImGui.GetContentRegionAvail(),
-                        "##LibraryVersionPreviewEditor"
-                    );
-                }
+                _previewEditor.Update();
+                using var __ = new ScopedStyleVar(ImGuiStyleVar.ChildBorderSize, 0);
+                _previewEditor.Draw(
+                    ImGui.GetCursorScreenPos(),
+                    ImGui.GetContentRegionAvail(),
+                    "##LibraryVersionPreviewEditor"
+                );
             }
+        }
 
-            var buttonSize = new Vector2(100, 0);
+        var buttonSize = new Vector2(100, 0);
 
-            if (Button("Close", buttonSize))
-                IsOpen = false;
+        if (Button("Close", buttonSize))
+            IsOpen = false;
 
-            ImGui.SameLine();
+        ImGui.SameLine();
 
-            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().x - buttonSize.x - ImGui.GetStyle().FramePadding.x);
+        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().x - buttonSize.x - ImGui.GetStyle().FramePadding.x);
 
-            if (Button("Load", buttonSize, "Load this version into editor", SelectedVersion == null))
-            {
-                LibraryWindow.LoadScript(SelectedVersion.VersionedScript, SelectedVersion);
-                IsOpen = false;
-            }
+        if (Button("Load", buttonSize, "Load this version into editor", SelectedVersion == null))
+        {
+            LibraryWindow.LoadScript(SelectedVersion.VersionedScript, SelectedVersion);
+            IsOpen = false;
         }
 
         if (ImGui.IsKeyDown(ImGuiKey.Escape))

@@ -1608,25 +1608,9 @@ public class EditorWindow
     }
 
     private bool _hasFocus = false;
-    private int _openGameWindows = 0;
-    private bool _didGameWindowOpen = false;
-    private bool _didGameWindowClose = false;
 
     // public bool HasFocus => _hasFocus && !LibrariesWindow.IsOpen && !(ActiveEditor._confirmWindow?.IsOpen ?? false) && !(ActiveTab.VersionWindow?.IsOpen ?? false);
     public bool HasFocus => _hasFocus && !(ActiveEditor._confirmWindow?.IsOpen ?? false);
-
-    public void CalcDidGameWindowOpen()
-    {
-        int count = 0;
-        count += Stationpedia.Instance.IsVisible ? 1 : 0;
-
-        foreach (var window in InputSourceCode.Instance.HelpWindows)
-            count += window.IsVisible ? 1 : 0;
-
-        _didGameWindowOpen = count > 0 && _openGameWindows == 0;
-        _didGameWindowClose = count == 0 && _openGameWindows > 0;
-        _openGameWindows = count;
-    }
 
     public void Draw()
     {
@@ -1666,14 +1650,8 @@ public class EditorWindow
             IsInitialized = true;
         }
 
-        CalcDidGameWindowOpen();
         if (CollapseOnGameWindow)
-        {
-            if (_didGameWindowOpen)
-                ImGui.SetNextWindowCollapsed(true);
-            if (_didGameWindowClose)
-                ImGui.SetNextWindowCollapsed(false);
-        }
+            SetImGuiWindowCollapsed();
 
         ImGui.Begin(Title);
         ImGui.GetStyle().Colors[(int)ImGuiCol.Tab] = new Vector4(0.2f, 0.2f, 0.2f, 1.0f);

@@ -1,8 +1,6 @@
 namespace StationeersIC10Editor;
 
-using System;
-
-using BepInEx.Configuration;
+using Assets.Scripts.UI;
 
 using ImGuiNET;
 
@@ -63,7 +61,10 @@ public static class Settings
 
     private static Vector2 _lastMousePos = new Vector2(0, 0);
     private static double _lastMouseMoveTime = 0.0;
+    private static int _openGameWindowCount = 0;
 
+    public static bool DidGameWindowOpen = false;
+    public static bool DidGameWindowClose = false;
     public static bool ShowTooltip = false;
     public static void Update()
     {
@@ -75,5 +76,26 @@ public static class Settings
             _lastMouseMoveTime = time;
         }
         ShowTooltip = time - _lastMouseMoveTime > TooltipDelay / 1000.0f;
+
+        int count = 0;
+        count += Stationpedia.Instance.IsVisible ? 1 : 0;
+
+        foreach (var window in InputSourceCode.Instance.HelpWindows)
+            count += window.IsVisible ? 1 : 0;
+
+        if (InputWindow.Instance.IsVisible)
+            count += 1;
+
+        DidGameWindowOpen = count > 0 && _openGameWindowCount == 0;
+        DidGameWindowClose = count == 0 && _openGameWindowCount > 0;
+        _openGameWindowCount = count;
+    }
+
+    public static void SetImGuiWindowCollapsed()
+    {
+        if (DidGameWindowOpen)
+            ImGui.SetNextWindowCollapsed(true);
+        if (DidGameWindowClose)
+            ImGui.SetNextWindowCollapsed(false);
     }
 }

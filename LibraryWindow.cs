@@ -31,9 +31,17 @@ public class VersionedScript(InstructionData data)
         { FileState.Untracked, ICodeFormatter.ColorFromHTML("red") },
         { FileState.Unchanged, ICodeFormatter.ColorFromHTML("green") },
         { FileState.Modified, ICodeFormatter.ColorFromHTML("yellow") },
+        { FileState.Workshop, ICodeFormatter.ColorFromHTML("white") },
+    };
+    static readonly Dictionary<FileState, string> Statuses = new() {
+        { FileState.Untracked, "Untracked" },
+        { FileState.Unchanged, "Unchanged" },
+        { FileState.Modified, "Modified" },
+        { FileState.Workshop, "Subscribed from Workshop" },
     };
 
     public uint Color => Colors[State];
+    public string StatusString => Statuses[State];
     public DateTime Date => DateTime.FromFileTimeUtc(Data.DateTime).ToLocalTime();
 
     public bool IsWorkshop => State == FileState.Workshop;
@@ -55,9 +63,9 @@ public class VersionedScript(InstructionData data)
 
     public async UniTask UpdateFileState()
     {
-        L.Debug($"Updating file state for library: {Data.DirectoryPath.Name}, State: {State}");
+        var oldState = State;
         State = await FossilVCS.GetFileState(Data.DirectoryPath.Name + "/instruction.xml");
-        L.Debug($"File state for library {Data.DirectoryPath.Name}: {State}");
+        L.Debug($"File state for library {Data.DirectoryPath.FullName}: {oldState} -> {State}");
     }
 
     public void Save()
@@ -70,11 +78,16 @@ public class VersionedScript(InstructionData data)
     {
         try
         {
-            await Data.PublishToWorkshop();
+            var (success, workshopId) = await Data.PublishToWorkshop();
+            if (success)
+            {
+                Data.WorkshopFileHandle = workshopId;
+                Save();
+            }
         }
         finally
         {
-            await LibraryWindow.LoadScripts();
+            LibraryWindow.NeedsReload(this);
         }
     }
 
@@ -88,6 +101,7 @@ public class VersionedScript(InstructionData data)
             sb.AppendLine($"Filename:       {Data.DirectoryPath.Name}/instruction.xml");
             sb.AppendLine($"Last Modified:  {Date}");
             sb.AppendLine($"Version Status: {State}");
+            sb.AppendLine($"Workshop ID:    {Data.WorkshopFileHandle}");
             sb.AppendLine($"Description:    {Data.Description}");
             sb.AppendLine($"\nRight click for more options");
             if (State == FileState.Untracked)
@@ -162,6 +176,7 @@ public class LibNode
         {
             Script.Data.Title = newName;
             Script.Data.SaveToFile(Script.Data.DirectoryPath);
+            LibraryWindow.NeedsReload(Script);
         }
         Name = GetName(newName);
         Prefix = GetPrefix(newName);
@@ -179,12 +194,26 @@ public class LibNode
 
         var oldPath = Script.Data.DirectoryPath.FullName;
         var newData = InstructionData.GetFromFile(oldPath + "/instruction.xml");
-        newData.Title = newName;
-        var count = 0;
         var newPath = oldPath + "_";
-        while (Directory.Exists(newPath + $"{count}"))
-            count++;
-        var newDir = Directory.CreateDirectory(newPath + $"{count}");
+
+        if (Script.State == FileState.Workshop)
+        {
+            newData.WorkshopFileHandle = 0;
+            newName = Script.Title + " (Copy)";
+            var filename = Regexes.CleanInvalidXmlChars(newName).SanitizeFilename();
+            newPath = Path.Combine(StationSaveUtils.GetSavePathScriptsSubDir().FullName, filename);
+        }
+
+        newData.Title = newName;
+        if (Directory.Exists(newPath))
+        {
+            newPath += "_";
+            var count = 0;
+            while (Directory.Exists(newPath + $"{count}"))
+                count++;
+            newPath += $"{count}/";
+        }
+        var newDir = Directory.CreateDirectory(newPath);
         newData.SaveToFile(newDir);
     }
 
@@ -205,7 +234,7 @@ public class LibNode
     {
         var paths = new List<string>();
         if (IsScript)
-            paths.Add(FullName.Replace(PathSeparator, "/"));
+            paths.Add(FullName.Replace(PathSeparator, "/") + "\n    " + Script.Path + "\n");
         foreach (var child in Children)
             paths.AddRange(child.GetAllScriptPaths());
         return paths;
@@ -240,11 +269,14 @@ public class LibNode
 
     public void Draw(bool treeView = true)
     {
+        if (Name == null)
+            return;
         if (IsFolder && LibraryWindow.HasFilter && Count == 0)
             return;
         var flags = ImGuiTreeNodeFlags.SpanAvailWidth;
         var isSelected = IsScript && LibraryWindow.SelectedNode == this;
-        var imguiLabel = $"{Name}##{FullName}_" + (IsScript ? "lib" : "dir");
+        var imguiId = IsScript ? Script.Path : FullName;
+        var imguiLabel = $"{Name}##{imguiId}";
 
         flags |= isSelected ? ImGuiTreeNodeFlags.Selected : 0;
         flags |= (IsFolder && treeView) ? 0 : ImGuiTreeNodeFlags.Leaf;
@@ -267,10 +299,13 @@ public class LibNode
                 LibraryWindow.Rename(this);
             if (IsScript)
             {
-                if (Script.State != FileState.Unchanged && ImGui.Selectable("Commit"))
-                    LibraryWindow.Commit(this);
-                if (ImGui.Selectable("History"))
-                    LibraryWindow.OpenHistory(this);
+                if (Script.State != FileState.Workshop)
+                {
+                    if (ImGui.Selectable("Commit"))
+                        LibraryWindow.Commit(this);
+                    if (ImGui.Selectable("History"))
+                        LibraryWindow.OpenHistory(this);
+                }
                 if (ImGui.Selectable("Copy"))
                     LibraryWindow.Copy(this);
                 if (ImGui.Selectable("Load"))
@@ -286,7 +321,7 @@ public class LibNode
             ImGui.EndPopup();
         }
 
-        if (treeView && ImGui.BeginDragDropSource())
+        if (treeView && (!IsScript || Script.State != FileState.Workshop) && ImGui.BeginDragDropSource())
         {
             _draggedNode = this;
             ImGui.SetDragDropPayload("LibNode", "folder");
@@ -316,17 +351,22 @@ public class LibNode
 
         if (IsScript)
         {
-            var radius = 5.0f; ;
+            var showSteamLogo = Script.Data.WorkshopFileHandle != 0 || Script.State == FileState.Workshop;
+            var hasVersion = Script.State != FileState.Workshop;
+
             var imSize = 0.9f * LineHeight;
+            var radius = 5.0f;
+
             var imPos = ImGui.GetCursorScreenPos() - new Vector2(0, 0.6f * LineHeight);
             if (!treeView)
                 imPos.x += 0.8f * CharWidth;
 
-            if (Script.State == FileState.Workshop)
+            if (showSteamLogo)
             {
                 var texPtr = ImGuiManager.ImGuiPointerFor(WorkshopMenu.Instance.SteamImage.texture);
-                imPos -= new Vector2(imSize / 2, 0.01f * LineHeight + 0.5f * imSize);
-                ImGui.GetWindowDrawList().AddImage(texPtr, imPos, imPos + new Vector2(imSize, imSize));
+                var pos = imPos - new Vector2(imSize / 2, 0.01f * LineHeight + 0.5f * imSize);
+                var color = hasVersion ? Script.Color : 0xFFFFFFFF;
+                ImGui.GetWindowDrawList().AddImage(texPtr, pos, pos + new Vector2(imSize, imSize), color);
             }
             else
                 ImGui.GetWindowDrawList().AddCircleFilled(imPos, radius, Script.Color, 12);
@@ -374,7 +414,9 @@ public class LibNode
 public static class LibraryWindow
 {
     public static bool IsOpen = false;
+    public static List<VersionedScript> LocalScripts = [];
     public static List<VersionedScript> VersionedScripts = [];
+    public static List<VersionedScript> WorkshopScripts = [];
     public static Dictionary<string, VersionedScript> VersionedScriptsByPath = [];
     public static LibNode Root = null;
 
@@ -397,6 +439,7 @@ public static class LibraryWindow
     private static bool _showModified = true;
     private static bool _showUnchanged = true;
     private static bool _hasFilter = false;
+    private static bool _isLoadingWorkshopScripts = false;
     public static char _dirSeparator = '|';
 
     private static bool _treeView = true;
@@ -438,113 +481,116 @@ public static class LibraryWindow
         using var _bg = new ScopedStyleColor(ImGuiCol.WindowBg, ICodeFormatter.ColorFromVector4(0.1f, 0.1f, 0.1f, 1.0f));
         using var _cbg = new ScopedStyleColor(ImGuiCol.PopupBg, ICodeFormatter.ColorFromVector4(0.1f, 0.1f, 0.2f, 1.0f));
 
-        if (
-            ImGui.Begin("Library", ref IsOpen)
-        )
+        SetImGuiWindowCollapsed();
+        ImGui.Begin("Library", ref IsOpen);
+        using var _ = new ScopedStyleColor(ImGuiCol.FrameBg, ICodeFormatter.ColorFromVector4(0.2f, 0.2f, 0.2f, 1.0f));
+        if (_hasWindowJustOpened)
         {
-            using var _ = new ScopedStyleColor(ImGuiCol.FrameBg, ICodeFormatter.ColorFromVector4(0.2f, 0.2f, 0.2f, 1.0f));
-            if (_hasWindowJustOpened)
-            {
-                ImGui.SetKeyboardFocusHere();
-                _hasWindowJustOpened = false;
-            }
-
-            var width = ImGui.GetContentRegionAvail().x;
-
-            ImGui.Text("Search: ");
-            ImGui.SameLine();
-            var oldSearchText = _searchText;
-            InputText(
-                "##LibrarySearch",
-                ref _searchText,
-                30 * CharWidth
-            );
-
-            if (ImGui.IsItemHovered() && ShowTooltip)
-                ImGui.SetTooltip("Load first matching entry with Enter key, or any entry with double-click.");
-
-            if (oldSearchText != _searchText)
-                Search();
-
-            // Load first entry when Enter pressed
-            if (
-                (ImGui.IsItemDeactivatedAfterEdit()
-                || ImGui.IsItemFocused()) && (ImGui.IsKeyPressed(ImGuiKey.Enter) || ImGui.IsKeyPressed(ImGuiKey.KeypadEnter))
-                && _SearchResults.Count > 0)
-                LoadScript(_SearchResults[0]);
-
-            ImGui.SameLine();
-
-            if (Checkbox("Code", ref _searchInCode, "Full-text search in code"))
-                Search();
-
-            ImGui.SameLine();
-
-            if (Checkbox("Author", ref _searchInAuthor, "Search author names"))
-                Search();
-
-            ImGui.SameLine(); ImGui.Text("  "); ImGui.SameLine();
-
-            Checkbox("Tree View", ref _treeView, "Show Folders in tree view");
-
-
-            ImGui.SameLine();
-            ImGui.SetCursorPosX(width - 3 * largeButtonSize.x - 2 * ImGui.GetStyle().ItemSpacing.x);
-            if (Button("Commit All", largeButtonSize, "Commit all files/changes to version control"))
-                CommitAll();
-            ImGui.SameLine();
-            if (Button("New Folder", largeButtonSize, "Create new root folder\nUse right-click in the tree view for nested folders"))
-                CreateFolder();
-
-            ImGui.SameLine();
-            if (Button("New Script", largeButtonSize, "Create new script from current Motherboard code"))
-                CreateScript();
-
-            ImGui.Text("Filter: ");
-            ImGui.SameLine();
-
-            if (Checkbox("Workshop ", ref _showWorkshop, "Show subscribed Steam workshop scripts."))
-                Search();
-
-            ImGui.SameLine();
-
-            if (Checkbox("Local", ref _showLocal, "Show local scripts."))
-                Search();
-
-            ImGui.SameLine(); ImGui.Text(" "); ImGui.SameLine();
-            ImGui.SeparatorEx(ImGuiSeparatorFlags.Vertical);
-            ImGui.SameLine(); ImGui.Text(" "); ImGui.SameLine();
-
-            if (Checkbox("Untracked ", ref _showUntracked, "Show untracked scripts\n  -> no versioned saved yet, red dot"))
-                Search();
-
-            ImGui.SameLine();
-
-            if (Checkbox("Modified ", ref _showModified, "Show modified scripts\n  -> changes since last version detected, yellow dot"))
-                Search();
-
-            ImGui.SameLine();
-
-            if (Checkbox("Unchanged", ref _showUnchanged, "Show unchanged scripts\n  -> no changes since last version, green dot"))
-                Search();
-
-
-            DrawLibrarySearchResults();
-            ImGui.SameLine();
-            DrawSelectedLibrary();
-
-            if (ImGui.IsWindowFocused() && ImGui.IsKeyPressed(ImGuiKey.Escape))
-                IsOpen = false;
-
-            _confirmWindow?.Draw();
-
-            ImGui.End();
+            ImGui.SetKeyboardFocusHere();
+            _hasWindowJustOpened = false;
         }
+
+        var width = ImGui.GetContentRegionAvail().x;
+
+        ImGui.Text("Search: ");
+        ImGui.SameLine();
+        var oldSearchText = _searchText;
+        InputText(
+            "##LibrarySearch",
+            ref _searchText,
+            30 * CharWidth
+        );
+
+        if (ImGui.IsItemHovered() && ShowTooltip)
+            ImGui.SetTooltip("Load first matching entry with Enter key, or any entry with double-click.");
+
+        if (oldSearchText != _searchText)
+            Search();
+
+        // Load first entry when Enter pressed
+        if (
+            (ImGui.IsItemDeactivatedAfterEdit()
+            || ImGui.IsItemFocused()) && (ImGui.IsKeyPressed(ImGuiKey.Enter) || ImGui.IsKeyPressed(ImGuiKey.KeypadEnter))
+            && _SearchResults.Count > 0)
+            LoadScript(_SearchResults[0]);
+
+        ImGui.SameLine();
+
+        if (Checkbox("Code", ref _searchInCode, "Full-text search in code"))
+            Search();
+
+        ImGui.SameLine();
+
+        if (Checkbox("Author", ref _searchInAuthor, "Search author names"))
+            Search();
+
+        ImGui.SameLine(); ImGui.Text("  "); ImGui.SameLine();
+
+        Checkbox("Tree View", ref _treeView, "Show Folders in tree view");
+
+
+        ImGui.SameLine();
+        ImGui.SetCursorPosX(width - 4 * largeButtonSize.x - 3 * ImGui.GetStyle().ItemSpacing.x);
+        if (Button("Reload", largeButtonSize, "Reload all scripts"))
+            NeedsReload();
+        ImGui.SameLine();
+        if (Button("Commit All", largeButtonSize, "Commit all files/changes to version control"))
+            CommitAll();
+        ImGui.SameLine();
+        if (Button("New Folder", largeButtonSize, "Create new root folder\nUse right-click in the tree view for nested folders"))
+            CreateFolder();
+
+        ImGui.SameLine();
+        if (Button("New Script", largeButtonSize, "Create new script from current Motherboard code"))
+            CreateScript();
+
+        ImGui.Text("Filter: ");
+        ImGui.SameLine();
+
+        if (Checkbox("Workshop ", ref _showWorkshop, "Show subscribed Steam workshop scripts."))
+            Search();
+
+        ImGui.SameLine();
+
+        if (Checkbox("Local", ref _showLocal, "Show local scripts."))
+            Search();
+
+        ImGui.SameLine(); ImGui.Text(" "); ImGui.SameLine();
+        ImGui.SeparatorEx(ImGuiSeparatorFlags.Vertical);
+        ImGui.SameLine(); ImGui.Text(" "); ImGui.SameLine();
+
+        if (Checkbox("Untracked ", ref _showUntracked, "Show untracked scripts\n  -> no versioned saved yet, red dot"))
+            Search();
+
+        ImGui.SameLine();
+
+        if (Checkbox("Modified ", ref _showModified, "Show modified scripts\n  -> changes since last version detected, yellow dot"))
+            Search();
+
+        ImGui.SameLine();
+
+        if (Checkbox("Unchanged", ref _showUnchanged, "Show unchanged scripts\n  -> no changes since last version, green dot"))
+            Search();
+
+
+        DrawLibrarySearchResults();
+        ImGui.SameLine();
+        DrawSelectedLibrary();
+
+        if (ImGui.IsWindowFocused() && ImGui.IsKeyPressed(ImGuiKey.Escape))
+            IsOpen = false;
+
+        _confirmWindow?.Draw();
+
+        ImGui.End();
 
         _fileHistoryWindow?.Draw();
 
         if (!IsOpen)
             IsOpen = false;
+
+        if (_needsReloadAll || _scriptsToReload.Count > 0)
+            NeedsUpdate();
 
         if (_needsReloadAll || _scriptsToReload.Count > 2)
         {
@@ -624,7 +670,7 @@ public static class LibraryWindow
                 State = FileState.Untracked
             };
             LoadScript(newLib);
-            LoadScripts().Forget();
+            NeedsReload();
             _confirmWindow = null;
         };
     }
@@ -664,7 +710,7 @@ public static class LibraryWindow
     public static void Copy(LibNode node)
     {
         node.Copy();
-        LoadScripts().Forget();
+        NeedsReload();
     }
 
     public static void Rename(LibNode node)
@@ -688,6 +734,7 @@ public static class LibraryWindow
         if (node.IsFolder && node.Children.Count == 0)
         {
             node.Delete();
+            NeedsUpdate();
             return;
         }
         var type = node.IsFolder ? "Folder" : "Script";
@@ -703,7 +750,7 @@ public static class LibraryWindow
             var sw = System.Diagnostics.Stopwatch.StartNew();
             node.Delete();
             L.Debug($"Delete: {node.FullName} took {sw.ElapsedMilliseconds}ms");
-            LoadScripts().Forget();
+            NeedsReload();
             SelectedNode = null;
             _previewEditor = null;
             _confirmWindow = null;
@@ -726,45 +773,96 @@ public static class LibraryWindow
         _previewEditor.ResetCode(node.Script.Data.Instructions ?? "", false);
     }
 
+    public static async UniTask<List<VersionedScript>> LoadLocalScripts()
+    {
+        L.Debug($"LoadLocalScripts");
+        var fileStates = await FossilVCS.GetFileStates();
+        var itemType = SteamTransport.WorkshopType.ICCode;
+        var localDirInfo = itemType.GetLocalDirInfo();
+        var fileName = itemType.GetLocalFileName();
+        var items = new List<VersionedScript>();
+        if (localDirInfo.Exists)
+        {
+            foreach (var f in localDirInfo.GetDirectories("*", SearchOption.AllDirectories).SelectMany((DirectoryInfo d) => d.GetFiles()))
+                if (f.Name == fileName)
+                {
+                    try
+                    {
+                        var instructionData = InstructionData.GetFromFile(f.FullName);
+                        instructionData.ItemWrapper = SteamTransport.ItemWrapper.WrapLocalItem(f, itemType);
+                        if (instructionData != null)
+                        {
+                            var script = new VersionedScript(instructionData);
+                            script.UpdateFileState(fileStates);
+                            items.Add(script);
+                        }
+                        else
+                            L.Warning($"Failed to load script {f.FullName}: instructionData is null");
+                    }
+                    catch (Exception e)
+                    {
+                        L.Error($"Failed to load script {f.FullName}: {e}");
+                    }
+                }
+        }
+        return items;
+    }
+
+    public static async UniTaskVoid LoadWorkshopScripts()
+    {
+        if (_isLoadingWorkshopScripts)
+            return;
+
+        _isLoadingWorkshopScripts = true;
+
+        try
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var delayTask = UniTask.Delay(10000);
+            var task = SteamTransport.Workshop_QueryItemsAsync(SteamTransport.WorkshopType.ICCode);
+            var (finished, result) = await UniTask.WhenAny(task, delayTask);
+            if (!finished)
+                L.Warning("Workshop script loading is taking longer than 10 seconds...");
+
+            var items = (finished ? result : await task).ToList();
+            var elapsed = sw.ElapsedMilliseconds;
+
+            if (finished)
+                L.Debug($"Loaded {items.Count} workshop scripts in {elapsed}ms");
+            else
+                L.Info($"Loaded {items.Count} workshop scripts in {elapsed}ms");
+
+            var newWorkshopScripts = new List<VersionedScript>();
+            foreach (var item in result)
+            {
+                var instructionData = InstructionData.GetFromFile(item.FilePathFullName);
+                instructionData.ItemWrapper = item;
+                instructionData.WorkshopFileHandle = item.Id;
+                var script = new VersionedScript(instructionData);
+                script.State = FileState.Workshop;
+                script.Data.Title = "Workshop" + _dirSeparator + script.Title;
+                newWorkshopScripts.Add(script);
+            }
+            WorkshopScripts = newWorkshopScripts;
+            NeedsUpdate();
+        }
+        catch (Exception ex)
+        {
+            L.Error($"Failed to load workshop scripts: {ex.Message}");
+            L.Error($"Stack trace: {ex.StackTrace}");
+        }
+        finally
+        {
+            _isLoadingWorkshopScripts = false;
+        }
+    }
 
     public static async UniTask LoadScripts()
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        var items = await NetworkManager.GetLocalAndWorkshopItems(
-            SteamTransport.WorkshopType.ICCode
-        );
-        L.Debug($"\tGet {sw.ElapsedMilliseconds}ms");
-
-        // await UniTask.SwitchToThreadPool();
-        var fileStates = await FossilVCS.GetFileStates();
-        await UniTask.SwitchToMainThread();
-        L.Debug($"\tFileStates {sw.ElapsedMilliseconds}ms");
-
-        var libs = new List<VersionedScript>();
-
-        foreach (var item in items)
-        {
-            try
-            {
-                var data = InstructionData.GetFromFile(item.FilePathFullName);
-                data.ItemWrapper = item;
-                var newLib = new VersionedScript(data);
-                newLib.UpdateFileState(fileStates);
-                libs.Add(newLib);
-            }
-            catch
-            {
-                L.Warning($"Failed to load library: {item.FilePathFullName}");
-            }
-        }
-        L.Debug($"\tBuild {sw.ElapsedMilliseconds}ms");
-        libs.Sort((a, b) => a.Data.Title.ToLowerInvariant().CompareTo(b.Data.Title.ToLowerInvariant()));
-
-        L.Debug($"\tLoaded {sw.ElapsedMilliseconds}ms");
-        VersionedScripts = libs;
-        VersionedScriptsByPath.Clear();
-        foreach (var script in VersionedScripts)
-            VersionedScriptsByPath[script.Path] = script;
+        LoadWorkshopScripts().Forget();
+        LocalScripts = await LoadLocalScripts();
+        L.Debug($"\tLoadLocalScripts {sw.ElapsedMilliseconds}ms");
 
         Search();
         L.Debug($"\tSearched {sw.ElapsedMilliseconds}ms");
@@ -772,17 +870,25 @@ public static class LibraryWindow
 
     public static void Open()
     {
+        if (IsOpen == false)
+            NeedsReload();
+
         IsOpen = true;
         _hasWindowJustOpened = true;
 
         ImGui.OpenPopup("Library Search");
-
-        if (VersionedScripts.Count == 0)
-            LoadScripts().Forget();
     }
 
     public static void Search()
     {
+        List<VersionedScript> libs = [.. LocalScripts, .. WorkshopScripts];
+
+        libs.Sort((a, b) => a.Data.Title.ToLowerInvariant().CompareTo(b.Data.Title.ToLowerInvariant()));
+        VersionedScripts = libs;
+
+        VersionedScriptsByPath.Clear();
+        foreach (var script in VersionedScripts)
+            VersionedScriptsByPath[script.Path] = script;
         _SearchResults.Clear();
 
         _hasFilter = !string.IsNullOrEmpty(_searchText) || !_showWorkshop || !_showLocal || !_showUntracked || !_showModified || !_showUnchanged;
@@ -861,14 +967,14 @@ public static class LibraryWindow
         return -1;
     }
 
-    public static int LoadScript(VersionedScript lib, FileVersion version = null)
+    public static int LoadScript(VersionedScript lib, FileVersion version = null, bool toMotherboard = false)
     {
         if (lib == null)
             return -1;
 
         var code = version?.Library?.Instructions ?? lib.Data.Instructions;
 
-        if (lib.State == FileState.Workshop)
+        if (lib.State == FileState.Workshop || toMotherboard)
         {
             Window.SetTab(0);
             Window.ActiveTab.Editors[0].ResetCode(code);
@@ -934,56 +1040,64 @@ public static class LibraryWindow
         {
             var width = ImGui.GetContentRegionAvail().x;
             var script = SelectedNode.Script;
+            var spacing = ImGui.GetStyle().ItemSpacing;
             var buttonPos = ImGui.GetCursorPos() + new Vector2(width - 3 * buttonSize.x - 2 * ImGui.GetStyle().ItemSpacing.x, 0);
+            var buttonPos2 = buttonPos + buttonSize + spacing;
+            var status = script.StatusString;
+            var isWorkshop = script.State == FileState.Workshop;
+
+            if (!isWorkshop && script.Data.WorkshopFileHandle != 0)
+                status += ", Published";
+
+            var pos = ImGui.GetCursorPos();
+
+            ImGui.SetCursorPos(buttonPos);
+            if (Button("History", buttonSize, "Browse old versions of this script", isWorkshop))
+                OpenHistory(SelectedNode);
+            ImGui.SameLine();
+            if (Button("Edit", buttonSize, "Edit script in new tab", isWorkshop))
+                LoadScript(script);
+
+            ImGui.SameLine();
+            if (Button("Load", buttonSize, "Load script into Motherboard"))
+                LoadScript(script, null, true);
+
+
+            // ImGui.SetCursorPosX(width - 2 * buttonSize.x);
+            ImGui.SetCursorPos(buttonPos2);
+            if (Button("Save", buttonSize, "Save description and title", isWorkshop))
+                script.Save();
+
+            ImGui.SameLine();
+            if (Button("Publish", buttonSize, "Publish the script to the Steam Workshop", isWorkshop))
+                script.Publish().Forget();
+
+            ImGui.SetCursorPos(pos);
+
             Text($"Author: {script.Data.Author}");
             Text($"Date:   {script.Date}");
+            Text($"Status: {status}");
             Text($"Name: ", width / 2);
             ImGui.SameLine();
 
-            var isWorkshop = script.State == FileState.Workshop;
-
             if (isWorkshop)
-                ImGui.Text(script.Data.Title);
+                ImGui.Text(script.Title);
             else
             {
                 var name = LibNode.GetName(script.Data.Title);
                 if (InputText("##name", ref name, width / 2))
                 {
                     SelectedNode.Rename(LibNode.Combine(SelectedNode.Prefix, name));
-                    LoadScripts().Forget();
                 }
             }
-
-            ImGui.SameLine();
-
-            ImGui.SetCursorPosX(width - 2 * buttonSize.x);
-            if (Button("Apply", buttonSize, "Save description", isWorkshop))
-                script.Save();
-
-            ImGui.SameLine();
-            if (Button("Publish", buttonSize, "Publish the script to the Steam Workshop"))
-                script.Publish().Forget();
-
-            var pos = ImGui.GetCursorPos();
-            ImGui.SetCursorPos(buttonPos);
-            if (Button("History", buttonSize, "Browse old versions of this script"))
-                OpenHistory(SelectedNode);
-            ImGui.SameLine();
-            if (Button("Delete", buttonSize, "Delete the script"))
-                Delete(SelectedNode);
-
-            ImGui.SameLine();
-            if (Button("Load", buttonSize, "Load this library into the editor"))
-                LoadScript(script);
-
-            ImGui.SetCursorPos(pos);
 
             var numLines = Mathf.Clamp(script.Data.Description.Split('\n').Length, 2, 5);
             var height = (numLines - 1) * LineHeightWithSpacing + LineHeight;
             ImGui.InputTextMultiline("", ref script.Data.Description, 1024, new Vector2(width, height), isWorkshop ? ImGuiInputTextFlags.ReadOnly : ImGuiInputTextFlags.None);
 
+
             if (ShowTooltip && ImGui.IsItemHovered())
-                ImGui.SetTooltip("Description, click 'Apply' to apply changes");
+                ImGui.SetTooltip("Description, click 'Save' to apply changes");
 
             _previewEditor.Update();
             using var _cbs = new ScopedStyleVar(ImGuiStyleVar.ChildBorderSize, 0);
