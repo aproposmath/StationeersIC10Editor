@@ -4,7 +4,7 @@
   <Author>aproposmath</Author>
   <ModID>com.github.aproposmath.StationeersIC10Editor</ModID>
   <WorkshopHandle>3592775931</WorkshopHandle>
-  <Version>0.9.5</Version>
+  <Version>0.9.6</Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
 
@@ -34,19 +34,10 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        0.9.5:
+        0.9.6:
 
-        - More robust library loading: load local scripts first, then load
-          workshop items (with async)
-        - Show all workshop items in hard-coded folder "Workshop"
-        - Show colored steam-logo for published items -> "Publish" will update
-          the existing item
-        - Collapse windows if Publish/update Changelog prompt is open
-        - Fix issue with deleting items
-        - Fix target path and workshop id when copying workhop item
-        - Separate buttons to "Load" (to motherboard) or "Edit" (new tab) a
-          script
-        - Subscribed Workshop items cannot be: moved, renamed, edited, commited
+        - Allow numbers/registers in lr command as ReagentMode parameter
+        - Fix exporting from library to IC10 chip
 
   </ChangeLog>
   <Tags>
