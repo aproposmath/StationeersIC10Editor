@@ -580,7 +580,7 @@ public struct ArgType
                 );
                 at.Add(DataType.Color, DataType.BasicEnum);
             }
-            if (Has(DataType.Label | DataType.DeviceId | DataType.BatchMode | DataType.LogicType))
+            if (Has(DataType.Label | DataType.DeviceId | DataType.BatchMode | DataType.LogicType | DataType.ReagentMode))
                 at.Add(DataType.Number, DataType.Register);
             return at;
         }
