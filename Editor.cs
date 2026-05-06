@@ -963,14 +963,11 @@ public class Editor
         code = code.Replace("\r", string.Empty);
         ClearCode(pushUndo);
         var lines = code.Split('\n');
-        if (pushUndo)
+        var formatter = CodeFormatters.GetFormatterByMatching(code);
+        if (typeof(ICodeFormatter) != CodeFormatter.GetType())
         {
-            var formatter = CodeFormatters.GetFormatterByMatching(code);
-            if (typeof(ICodeFormatter) != CodeFormatter.GetType())
-            {
-                CodeFormatter = formatter;
-                CodeFormatter.Editor = this;
-            }
+            CodeFormatter = formatter;
+            CodeFormatter.Editor = this;
         }
         CodeFormatter.ResetCode(code);
         CaretPos = new TextPosition(0, 0);
