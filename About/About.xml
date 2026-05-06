@@ -4,7 +4,7 @@
   <Author>aproposmath</Author>
   <ModID>com.github.aproposmath.StationeersIC10Editor</ModID>
   <WorkshopHandle>3592775931</WorkshopHandle>
-  <Version>0.9.6</Version>
+  <Version>0.9.7</Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
 
@@ -34,10 +34,11 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        0.9.6:
+        0.9.7:
 
-        - Allow numbers/registers in lr command as ReagentMode parameter
-        - Fix exporting from library to IC10 chip
+        - Load all subscribed workshop scripts (stopped at 50 before)
+        - Very simple markdown formatter (highlight headers, bullet points, task items )
+        - Bugfixes
 
   </ChangeLog>
   <Tags>
