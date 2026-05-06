@@ -210,7 +210,6 @@ public class IC10EditorPlugin : BaseUnityPlugin
             CodeFormatters.RegisterFormatter("Plain", typeof(PlainTextFormatter));
             CodeFormatters.RegisterFormatter("IC10", typeof(IC10.IC10CodeFormatter), true);
             CodeFormatters.RegisterFormatter("Markdown", typeof(SimpleMarkdownFormatter));
-            // CodeFormatters.RegisterFormatter("Python", typeof(PythonStaticFormatter));
 
             FossilVCS.Init().Forget();
         }
