@@ -452,7 +452,8 @@ public class FileHistoryWindow
         using var _ = new ScopedStyleVar(ImGuiStyleVar.FrameRounding, 2.0f);
         ImGui.SetNextWindowSize(new Vector2(1300, 800), ImGuiCond.FirstUseEver);
         Settings.SetImGuiWindowCollapsed();
-        ImGui.Begin($"Version History: {Library.Data.Title}", ref IsOpen, ImGuiWindowFlags.NoSavedSettings);
+        var title = Library?.Data?.Title ?? "<no data>";
+        ImGui.Begin($"Version History: {title}", ref IsOpen, ImGuiWindowFlags.NoSavedSettings);
         using (new Pane("Versions", 0.4f, -1))
         {
             foreach (var version in Versions)
