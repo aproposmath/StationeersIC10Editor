@@ -19,7 +19,7 @@ public class StaticFormatter : ICodeFormatter
         this.KeepWhitespaces = KeepWhitespaces;
     }
 
-    public List<Token> TokenizeLine(string lineText)
+    virtual public List<Token> TokenizeLine(string lineText)
     {
         if (string.IsNullOrEmpty(lineText))
             return new List<Token>();
@@ -27,7 +27,7 @@ public class StaticFormatter : ICodeFormatter
         var tokens = new List<Token>();
         var comment = string.Empty;
 
-        if (lineText.Contains(CommentPrefix))
+        if (!string.IsNullOrEmpty(CommentPrefix) && lineText.Contains(CommentPrefix))
         {
             int commentIndex = lineText.IndexOf(CommentPrefix);
             comment = lineText.Substring(commentIndex);
