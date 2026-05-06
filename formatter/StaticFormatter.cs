@@ -12,10 +12,10 @@ public class StaticFormatter : ICodeFormatter
 
     public StaticFormatter(string TokenSeparators, string StringDelimiters, string CommentPrefix, Dictionary<string, uint> Keywords = null, bool KeepWhitespaces = true)
     {
-        this.TokenSeparators = new HashSet<char>(TokenSeparators.ToCharArray());
-        this.StringDelimiters = new HashSet<char>(StringDelimiters.ToCharArray());
+        this.TokenSeparators = [.. TokenSeparators.ToCharArray()];
+        this.StringDelimiters = [.. StringDelimiters.ToCharArray()];
         this.CommentPrefix = CommentPrefix;
-        this.Keywords = Keywords == null ? new Dictionary<string, uint>() : Keywords;
+        this.Keywords = Keywords ?? [];
         this.KeepWhitespaces = KeepWhitespaces;
     }
 
@@ -36,7 +36,7 @@ public class StaticFormatter : ICodeFormatter
 
         int col = 0;
 
-        var incrementCol = () =>
+        void incrementCol()
         {
             if (StringDelimiters.Contains(lineText[col]))
             {
@@ -48,9 +48,9 @@ public class StaticFormatter : ICodeFormatter
             }
             else
                 col++;
-        };
+        }
 
-        var addToken = (int start, int end) =>
+        void addToken(int start, int end)
         {
             if (start >= end || start < 0 || end > lineText.Length)
                 return;
@@ -63,9 +63,8 @@ public class StaticFormatter : ICodeFormatter
                     token.Style = ColorTheme.Default.Colors[18]; // String color
                 tokens.Add(token);
             }
-        };
+        }
 
-        string word = string.Empty;
         while (col < lineText.Length)
         {
             if (TokenSeparators.Contains(lineText[col]))
