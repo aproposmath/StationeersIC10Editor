@@ -25,15 +25,17 @@ public class VersionedScript(InstructionData data)
     public string Path => Data.DirectoryPath.FullName;
     public string Title => Data.Title.Split(PathSeparator[0]).Last();
     public InstructionData Data = data;
-    public FileState State = FileState.Untracked;
+    public FileState State = FileState.Unknown;
     static readonly Dictionary<FileState, uint> Colors = new()
     {
+        { FileState.Unknown, ICodeFormatter.ColorFromHTML("gray") },
         { FileState.Untracked, ICodeFormatter.ColorFromHTML("red") },
         { FileState.Unchanged, ICodeFormatter.ColorFromHTML("green") },
         { FileState.Modified, ICodeFormatter.ColorFromHTML("yellow") },
         { FileState.Workshop, ICodeFormatter.ColorFromHTML("white") },
     };
     static readonly Dictionary<FileState, string> Statuses = new() {
+        { FileState.Unknown, "Loading..." },
         { FileState.Untracked, "Untracked" },
         { FileState.Unchanged, "Unchanged" },
         { FileState.Modified, "Modified" },
@@ -773,10 +775,9 @@ public static class LibraryWindow
         _previewEditor.ResetCode(node.Script.Data.Instructions ?? "", false);
     }
 
-    public static async UniTask<List<VersionedScript>> LoadLocalScripts()
+    public static List<VersionedScript> LoadLocalScripts()
     {
         L.Debug($"LoadLocalScripts");
-        var fileStates = await FossilVCS.GetFileStates();
         var itemType = SteamTransport.WorkshopType.ICCode;
         var localDirInfo = itemType.GetLocalDirInfo();
         var fileName = itemType.GetLocalFileName();
@@ -793,7 +794,6 @@ public static class LibraryWindow
                         if (instructionData != null)
                         {
                             var script = new VersionedScript(instructionData);
-                            script.UpdateFileState(fileStates);
                             items.Add(script);
                         }
                         else
@@ -808,10 +808,10 @@ public static class LibraryWindow
         return items;
     }
 
-    public static async UniTaskVoid LoadWorkshopScripts()
+    public static async UniTask<bool> LoadWorkshopScripts(uint page = 1u)
     {
         if (_isLoadingWorkshopScripts)
-            return;
+            return false;
 
         _isLoadingWorkshopScripts = true;
 
@@ -819,7 +819,7 @@ public static class LibraryWindow
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var delayTask = UniTask.Delay(10000);
-            var task = SteamTransport.Workshop_QueryItemsAsync(SteamTransport.WorkshopType.ICCode);
+            var task = SteamTransport.Workshop_QueryItemsAsync(SteamTransport.WorkshopType.ICCode, page);
             var (finished, result) = await UniTask.WhenAny(task, delayTask);
             if (!finished)
                 L.Warning("Workshop script loading is taking longer than 10 seconds...");
@@ -828,9 +828,9 @@ public static class LibraryWindow
             var elapsed = sw.ElapsedMilliseconds;
 
             if (finished)
-                L.Debug($"Loaded {items.Count} workshop scripts in {elapsed}ms");
+                L.Debug($"Loaded {items.Count} workshop scripts at page {page} in {elapsed}ms");
             else
-                L.Info($"Loaded {items.Count} workshop scripts in {elapsed}ms");
+                L.Info($"Loaded {items.Count} workshop scripts at page {page} in {elapsed}ms");
 
             var newWorkshopScripts = new List<VersionedScript>();
             foreach (var item in result)
@@ -843,8 +843,19 @@ public static class LibraryWindow
                 script.Data.Title = "Workshop" + _dirSeparator + script.Title;
                 newWorkshopScripts.Add(script);
             }
-            WorkshopScripts = newWorkshopScripts;
-            NeedsUpdate();
+            if (page == 1)
+            {
+                WorkshopScripts = newWorkshopScripts;
+                NeedsUpdate();
+                return true;
+            }
+            else if (newWorkshopScripts.Count > 0)
+            {
+                WorkshopScripts.AddRange(newWorkshopScripts);
+                NeedsUpdate();
+                return true;
+            }
+            return false;
         }
         catch (Exception ex)
         {
@@ -855,23 +866,40 @@ public static class LibraryWindow
         {
             _isLoadingWorkshopScripts = false;
         }
+        return false;
     }
 
     public static async UniTask LoadScripts()
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        LoadWorkshopScripts().Forget();
-        LocalScripts = await LoadLocalScripts();
+        uint page = 1;
+        var loadWorkshopTask = LoadWorkshopScripts(page);
+        LocalScripts = LoadLocalScripts();
         L.Debug($"\tLoadLocalScripts {sw.ElapsedMilliseconds}ms");
 
         Search();
         L.Debug($"\tSearched {sw.ElapsedMilliseconds}ms");
+
+        await UniTask.SwitchToThreadPool();
+        var fileStates = await FossilVCS.GetFileStates();
+        await UniTask.SwitchToMainThread();
+        foreach (var script in LocalScripts)
+            script.UpdateFileState(fileStates);
+
+        var workshopDone = await loadWorkshopTask;
+        while (workshopDone)
+            workshopDone = await LoadWorkshopScripts(++page);
     }
 
     public static void Open()
     {
         if (IsOpen == false)
+        {
+            LocalScripts = [];
+            WorkshopScripts = [];
+            _SearchResults = [];
             NeedsReload();
+        }
 
         IsOpen = true;
         _hasWindowJustOpened = true;

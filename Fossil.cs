@@ -377,6 +377,7 @@ public class FossilVCS
 
 public enum FileState
 {
+    Unknown,
     Untracked,
     Unchanged,
     Modified,
@@ -427,11 +428,12 @@ public class FileHistoryWindow
 
     public async UniTaskVoid LoadVersions()
     {
-        Versions = await FossilVCS.Log(Library.Data.DirectoryPath.Name);
+        var newVersions = await FossilVCS.Log(Library.Data.DirectoryPath.Name);
         var currentVersion = new FileVersion { Hash = "", Path = "", Date = "", Message = "Last saved", Library = Library.Data };
-        Versions.Insert(0, currentVersion);
-        foreach (var v in Versions)
+        newVersions.Insert(0, currentVersion);
+        foreach (var v in newVersions)
             v.VersionedScript = Library;
+        Versions = newVersions;
     }
 
     public void Close()
