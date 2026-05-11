@@ -21,7 +21,6 @@ public abstract class ICodeFormatter
     public static uint ColorLineNumber = ColorFromHTML("#808080");
     public static uint ColorSelection = ColorFromHTML("#1a44b0ff");
     public static uint ColorNumber = ColorFromHTML("#20b2aa");
-    public static float LineNumberOffset = 5.3f;
 
     public static Style DefaultStyle = new Style
     {
@@ -218,7 +217,7 @@ public abstract class ICodeFormatter
 
     public Dictionary<int, Style> LineStyles = new Dictionary<int, Style>();
 
-    public virtual void DrawLine(int lineIndex, TextRange selection, bool drawLineNumber = true)
+    public virtual void DrawLine(int lineIndex, TextRange selection)
     {
         Vector2 pos = ImGui.GetCursorScreenPos();
         var drawList = ImGui.GetWindowDrawList();
@@ -232,37 +231,17 @@ public abstract class ICodeFormatter
 
         if (lineStyle.Color > 0)
         {
-            float offset = 4.8f * CharWidth - ImGui.GetStyle().WindowPadding.x;
             if (style.Color > 0)
             {
                 drawList.AddLine(
-                    pos + new Vector2(
-                        offset,
-                        0
-                    ),
-                    new Vector2(
-                        pos.x + offset,
-                        pos.y + LineHeight
-                    ),
+                    pos,
+                    pos + LineHeight * Vector2.up,
                     style.Color,
                     5.0f
                 );
             }
         }
 
-
-        if (drawLineNumber)
-        {
-            int lineNumber = lineIndex;
-            if (RelativeLineNumbers && lineNumber != CaretPos.Line)
-                lineNumber = Math.Abs(lineNumber - CaretPos.Line);
-            drawList.AddText(
-                pos,
-                ICodeFormatter.ColorLineNumber,
-                lineNumber.ToString().PadLeft(3) + "."
-            );
-            pos.x += ICodeFormatter.LineNumberOffset * CharWidth;
-        }
 
         if (lineStyle.Background > 0)
         {
@@ -280,17 +259,14 @@ public abstract class ICodeFormatter
         }
 
         line.DrawBackground(pos, lineIndex);
-
-        int selectionMin = -1,
-            selectionMax = -1;
         // Calculate Selection Rect
         if (selection)
         {
             float lineHeight = ImGui.GetTextLineHeightWithSpacing();
             if (selection.Start.Line <= lineIndex && selection.End.Line >= lineIndex)
             {
-                selectionMin = lineIndex == selection.Start.Line ? selection.Start.Col : 0;
-                selectionMax = lineIndex == selection.End.Line ? selection.End.Col : line.Length;
+                var selectionMin = lineIndex == selection.Start.Line ? selection.Start.Col : 0;
+                var selectionMax = lineIndex == selection.End.Line ? selection.End.Col : line.Length;
 
                 selectionMin = Mathf.Clamp(selectionMin, 0, line.Length);
                 selectionMax = Mathf.Clamp(selectionMax, 0, line.Length);

@@ -168,6 +168,7 @@ public class Editor
 
     public TextPosition _caretPos;
 
+    public static float LineNumberOffset = 5.0f;
     public int ScrollToCaret = 0;
     protected double _timeLastAction = 0.0;
     protected bool _isCodeChanged = false;
@@ -280,17 +281,22 @@ public class Editor
 
     public Vector2 _textAreaOrigin,
         _textAreaSize;
+    public float _scrollX = 0.0f;
     public float _scrollY = 0.0f;
+    private bool _hasHorizontalScrollbar = false;
+    private bool _hasVerticalScrollbar = false;
 
     public bool IsMouseInsideTextArea()
     {
         Vector2 mousePos = ImGui.GetMousePos();
         float px = _textAreaOrigin.x;
         float py = _textAreaOrigin.y + ImGui.GetStyle().FramePadding.y;
+        float maxX = px + _textAreaSize.x - (_hasVerticalScrollbar ? ImGui.GetStyle().ScrollbarSize : 0.0f);
+        float maxY = py + _textAreaSize.y - (_hasHorizontalScrollbar ? ImGui.GetStyle().ScrollbarSize : 0.0f);
         return mousePos.x >= px
-            && mousePos.x <= px + _textAreaSize.x - ImGui.GetStyle().ScrollbarSize
+            && mousePos.x <= maxX
             && mousePos.y >= py
-            && mousePos.y <= py + _textAreaSize.y;
+            && mousePos.y <= maxY;
     }
 
     public TextPosition GetTextPositionFromMouse(bool clampToTextArea = true)
@@ -300,7 +306,7 @@ public class Editor
         int line =
             (int)((mousePos.y + LineSpacing - _firstLineY) / LineHeight) + _firstLineIndex;
         int column = (int)(
-            (mousePos.x - _textAreaOrigin.x) / CharWidth - ICodeFormatter.LineNumberOffset - 0.5f
+            (mousePos.x - _textAreaOrigin.x + _scrollX) / CharWidth
         );
 
         if (!clampToTextArea && (line < 0 || line >= Lines.Count || column < 0))
@@ -1033,25 +1039,60 @@ public class Editor
 
     public bool HasFocus => KeyHandler?.Editor == this;
 
+    public void DrawLineNumbers(Vector2 pos, Vector2 size, string id)
+    {
+        ImGui.SetNextWindowContentSize(size);
+        ImGui.SetCursorScreenPos(pos);
+        ImGui.BeginChild(id + "_LineNumbers", size, true, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoSavedSettings);
+
+        var yEnd = pos.y + size.y;
+
+        var drawList = ImGui.GetWindowDrawList();
+
+        var linePos = pos + (LineNumberOffset - 0.8f) * CharWidth * Vector2.right;
+        drawList.AddLine(
+            linePos,
+            linePos + size.y * Vector2.up,
+            ICodeFormatter.ColorLineNumber,
+            1.5f
+        );
+
+        pos.y = _firstLineY;
+        var lineNumber = _firstLineIndex;
+        while (pos.y < yEnd)
+        {
+            if (lineNumber == -1)
+                break;
+            drawList.AddText(
+                pos,
+                ICodeFormatter.ColorLineNumber,
+                lineNumber.ToString().PadLeft(3) + "."
+            );
+            lineNumber++;
+            pos.y += LineHeight;
+        }
+
+        ImGui.EndChild();
+    }
+
     public unsafe void Draw(Vector2 pos, Vector2 size, string id)
     {
+        using var _cbs = new ScopedStyleVar(ImGuiStyleVar.ChildBorderSize, 0);
         var _f = new ScopedFont(ImGui.GetIO().Fonts.Fonts[0]);
-        _textAreaSize = size;
-        ImGui.BeginChild(id, size, true);
-        _textAreaOrigin = pos;
-        _textAreaSize = size;
-        var posPrev = ImGui.GetCursorScreenPos();
+        var maxLineLength = Lines.Count > 0 ? Lines.Max(line => line.Length) : 0;
+        var contentSize = new Vector2(CharWidth * (LineNumberOffset + maxLineLength + 1), LineHeight * Lines.Count);
 
-        var linePos = _textAreaOrigin;
-        linePos.x += 4.8f * CharWidth;
-        ImGui
-            .GetWindowDrawList()
-            .AddLine(
-                linePos,
-                new Vector2(linePos.x, linePos.y + LineHeight * (Lines.Count + 0.3f)),
-                ICodeFormatter.ColorLineNumber,
-                1.5f
-            );
+        var lineNumbersWidth = CharWidth * LineNumberOffset;
+        var lineNumbersOffset = new Vector2(lineNumbersWidth, 0);
+
+        _textAreaOrigin = pos + lineNumbersOffset;
+        _textAreaSize = size - lineNumbersOffset;
+
+        ImGui.SetNextWindowContentSize(contentSize);
+        ImGui.SetCursorScreenPos(_textAreaOrigin);
+        ImGui.BeginChild(id, _textAreaSize, true, ImGuiWindowFlags.HorizontalScrollbar);
+
+        var posPrev = ImGui.GetCursorScreenPos();
 
         var clipper = new ImGuiListClipperPtr(
             ImGuiNative.ImGuiListClipper_ImGuiListClipper()
@@ -1059,33 +1100,37 @@ public class Editor
 
         clipper.Begin(Lines.Count);
 
+
         if (ScrollToCaret > 0)
         {
-            var lineHeight = LineHeight;
-            var lineSpacing = ImGui.GetStyle().ItemSpacing.y;
+            var viewSize = contentSize - new Vector2(ImGui.GetScrollMaxX(), ImGui.GetScrollMaxY());
 
-            var pageHeight = (Lines.Count * lineHeight) - ImGui.GetScrollMaxY();
+            var scrollX = ImGui.GetScrollX();
             var scrollY = ImGui.GetScrollY();
-            var viewTop = _scrollY;
-            var viewBottom = _scrollY + pageHeight;
 
-            var caretTop = CaretLine * lineHeight;
-            var caretBottom = caretTop + lineHeight;
-
-            if (caretTop < viewTop)
+            static float adjustScroll(float caretStart, float caretSize, float viewStart, float viewSize1)
             {
-                scrollY = caretTop;
-            }
-            else if (caretBottom > viewBottom)
-            {
-                scrollY = caretBottom - pageHeight + lineSpacing;
+                var caretEnd = caretStart + caretSize;
+                var viewEnd = viewStart + viewSize1;
+                if (caretStart < viewStart)
+                    return caretStart - caretSize;
+                else if (caretEnd > viewEnd)
+                    return caretEnd - viewSize1 + caretSize;
+                return viewStart;
             }
 
-            ImGui.SetScrollY(Math.Min(scrollY, ImGui.GetScrollMaxY()));
+            scrollX = adjustScroll(CharWidth * CaretCol, CharWidth, scrollX, viewSize.x);
+            scrollY = adjustScroll(CaretLine * LineHeight, LineHeight, scrollY, viewSize.y);
+
+            ImGui.SetScrollX(Mathf.Clamp(scrollX, 0.0f, ImGui.GetScrollMaxX()));
+            ImGui.SetScrollY(Mathf.Clamp(scrollY, 0.0f, ImGui.GetScrollMaxY()));
             ScrollToCaret -= 1;
         }
 
+        _scrollX = ImGui.GetScrollX();
         _scrollY = ImGui.GetScrollY();
+        _hasHorizontalScrollbar = ImGui.GetScrollMaxX() > 0.0f;
+        _hasVerticalScrollbar = ImGui.GetScrollMaxY() > 0.0f;
 
         _firstLineIndex = -1;
 
@@ -1096,13 +1141,12 @@ public class Editor
             for (var i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
             {
                 var ppos = ImGui.GetCursorScreenPos();
+                // ImGui.SetCursorScreenPos(ppos + CharWidth * Vector2.right);
                 CodeFormatter.DrawLine(i, selection);
 
                 if (i == CaretLine && HasFocus)
                 {
-                    _caretPixelPos = ppos;
-                    _caretPixelPos.x +=
-                        CharWidth * (CaretCol + ICodeFormatter.LineNumberOffset);
+                    _caretPixelPos = ppos + CharWidth * CaretCol * Vector2.right;
                     DrawCaret(_caretPixelPos);
                 }
                 if (_firstLineIndex == -1)
@@ -1123,10 +1167,12 @@ public class Editor
         }
 
         clipper.End();
-
         CodeFormatter.AfterDrawLines(_textAreaOrigin, _textAreaSize);
 
         ImGui.EndChild();
+
+        DrawLineNumbers(pos, new Vector2(lineNumbersWidth, size.y), id);
+
         ImGui.SetCursorScreenPos(posPrev);
     }
 
@@ -1160,13 +1206,13 @@ public class Editor
         {
             // Draw a block cursor
             drawList.AddRect(
-                new Vector2(pos.x - 1, pos.y - 1),
+                new Vector2(pos.x + 1, pos.y + 1),
                 new Vector2(pos.x + CharWidth, pos.y + height),
                 ImGui.ColorConvertFloat4ToU32(new Vector4(0.7f, 0.7f, 0.7f, 1.0f))
             );
             drawList.AddRect(
-                new Vector2(pos.x - 2, pos.y - 2),
-                new Vector2(pos.x + 1 + CharWidth, pos.y + height + 1),
+                new Vector2(pos.x, pos.y),
+                new Vector2(pos.x - 1 + CharWidth, pos.y + height - 1),
                 ImGui.ColorConvertFloat4ToU32(new Vector4(0f, 0f, 0f, 1.0f))
             );
         }

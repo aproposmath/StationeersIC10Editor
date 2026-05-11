@@ -233,11 +233,11 @@ public static class DebugWindow
         ImGui.Text(
             $"Mouse relative to text area: {ImGui.GetMousePos().x - e._textAreaOrigin.x:F2}, {ImGui.GetMousePos().y - (e._textAreaOrigin.y + e._scrollY):F2}"
         );
-        ImGui.Text($"LineNumberOffset: {ICodeFormatter.LineNumberOffset}");
+        ImGui.Text($"LineNumberOffset: {Editor.LineNumberOffset}");
         ImGui.Text($"Mouse caret pos: {e.GetTextPositionFromMouse(false)}");
         var mousePos = ImGui.GetMousePos();
         float c1 = (mousePos.x - e._textAreaOrigin.x + ImGui.GetStyle().FramePadding.x) / CharWidth;
-        float c2 = c1 - ICodeFormatter.LineNumberOffset;
+        float c2 = c1 - Editor.LineNumberOffset;
         ImGui.Text($"Mouse caret col: {c1}, {c2}");
         ImGui.Text(
             $"Mouse line: {(ImGui.GetMousePos().y - e._textAreaOrigin.y) / LineHeight:F2}"
