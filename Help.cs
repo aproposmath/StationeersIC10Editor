@@ -59,20 +59,26 @@ public static class HelpWindow
                 _tabIndex = 0;
 
             if (ImGui.BeginTabItem("Config", _TabFlags(1)))
+            {
                 DrawConfig();
-            ImGui.EndTabItem();
+                ImGui.EndTabItem();
+            }
             if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
                 _tabIndex = 1;
 
             if (ImGui.BeginTabItem("Keybindings", _TabFlags(2)))
+            {
                 DrawKeybindings();
-            ImGui.EndTabItem();
+                ImGui.EndTabItem();
+            }
             if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
                 _tabIndex = 2;
 
             if (ImGui.BeginTabItem("VIM", _TabFlags(3)))
+            {
                 DrawVIM();
-            ImGui.EndTabItem();
+                ImGui.EndTabItem();
+            }
             if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
                 _tabIndex = 3;
 
