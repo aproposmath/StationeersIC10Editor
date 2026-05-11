@@ -4,7 +4,7 @@
   <Author>aproposmath</Author>
   <ModID>com.github.aproposmath.StationeersIC10Editor</ModID>
   <WorkshopHandle>3592775931</WorkshopHandle>
-  <Version>0.9.7</Version>
+  <Version>0.9.8</Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
 
@@ -34,11 +34,12 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        0.9.7:
+        0.9.8:
 
-        - Load all subscribed workshop scripts (stopped at 50 before)
-        - Very simple markdown formatter (highlight headers, bullet points, task items )
-        - Bugfixes
+        - Horizontal scroll
+        - Diff view in file history window
+        - Help window overhaul
+        - Fix Exception in file history window (thx @Electorlyte)
 
   </ChangeLog>
   <Tags>
