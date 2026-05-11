@@ -15,6 +15,44 @@ public static class HelpWindow
     public static bool IsOpen = false;
     private static int _tabIndex = 0;
 
+    // --- Colors ---
+    private static readonly Vector4 ColHeading    = new(0.4f, 0.8f, 1.0f, 1.0f);
+    private static readonly Vector4 ColSubheading = new(0.6f, 0.9f, 0.6f, 1.0f);
+    private static readonly Vector4 ColKey        = new(1.0f, 0.85f, 0.4f, 1.0f);
+    private static readonly Vector4 ColHint       = new(0.8f, 0.8f, 0.8f, 1.0f);
+    private static readonly Vector4 ColAccent     = new(1.0f, 0.5f, 0.3f, 1.0f);
+    private static readonly Vector4 ColGreen      = new(0.4f, 0.9f, 0.4f, 1.0f);
+    private static readonly Vector4 ColYellow     = new(1.0f, 0.9f, 0.3f, 1.0f);
+    private static readonly Vector4 ColRed        = new(1.0f, 0.4f, 0.4f, 1.0f);
+    private static readonly Vector4 ColDim        = new(0.5f, 0.5f, 0.6f, 1.0f);
+
+    private static void Heading(string text)
+    {
+        ImGui.NewLine();
+        ImGui.TextColored(ColHeading, text);
+        ImGui.Separator();
+    }
+
+    private static void SubHeading(string text)
+    {
+        ImGui.NewLine();
+        ImGui.TextColored(ColSubheading, text);
+    }
+
+    private static void Bullet(string text, Vector4? color = null)
+    {
+        ImGui.TextColored(color ?? ColHint, "  \u2022 ");
+        ImGui.SameLine();
+        ImGui.TextWrapped(text);
+    }
+
+    private static void KeyRow(string key, string desc)
+    {
+        ImGui.TextColored(ColKey, $"  {key,-26}");
+        ImGui.SameLine();
+        ImGui.TextWrapped(desc);
+    }
+
     private static ImGuiTabItemFlags _TabFlags(int i)
     {
         return i == _tabIndex ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None;
@@ -25,8 +63,13 @@ public static class HelpWindow
         if (!IsOpen)
             return;
 
-        using var _ = new ScopedStyleColor(ImGuiCol.WindowBg, ICodeFormatter.ColorFromVector4(0.1f, 0.1f, 0.2f, 1.0f));
-        ImGui.SetNextWindowSize(Scale * new Vector2(600, 400), ImGuiCond.FirstUseEver);
+        using var _bg = new ScopedStyleColor(ImGuiCol.WindowBg, ICodeFormatter.ColorFromVector4(0.08f, 0.08f, 0.14f, 1.0f));
+        using var _frame = new ScopedStyleColor(ImGuiCol.FrameBg, ICodeFormatter.ColorFromVector4(0.12f, 0.12f, 0.2f, 1.0f));
+        using var _tab = new ScopedStyleColor(ImGuiCol.Tab, ICodeFormatter.ColorFromVector4(0.15f, 0.15f, 0.25f, 1.0f));
+        using var _tabActive = new ScopedStyleColor(ImGuiCol.TabActive, ICodeFormatter.ColorFromVector4(0.25f, 0.25f, 0.45f, 1.0f));
+        using var _tabHover = new ScopedStyleColor(ImGuiCol.TabHovered, ICodeFormatter.ColorFromVector4(0.3f, 0.3f, 0.5f, 1.0f));
+
+        ImGui.SetNextWindowSize(Scale * new Vector2(650, 450), ImGuiCond.FirstUseEver);
         ImGui.Begin(
             "IC10 Editor Help",
             ref IsOpen,
@@ -35,24 +78,9 @@ public static class HelpWindow
 
         if (ImGui.BeginTabBar("EditorTabs"))
         {
-            if (ImGui.BeginTabItem("Help", _TabFlags(0)))
+            if (ImGui.BeginTabItem("Overview", _TabFlags(0)))
             {
-                using var _h = new ScopedChild("");
-                ImGui.TextWrapped(
-                    "This is the IC10 Editor. It allows you to edit the source code of IC10 programs with syntax highlighting, undo/redo, and other features."
-                );
-
-                ImGui.Text("");
-                ImGui.TextColored(new Vector4(1, 1, 1, 1), "Hints:");
-                ImGui.Text("");
-                ImGui.TextWrapped("- Click on 'Commit' in the Library window to save a version/snapshot of all scripts.");
-                ImGui.TextWrapped("- Right-click on file names/folders in the Library window for actions.");
-                ImGui.TextWrapped("- Files in folders are still kept at the original path on disk (the path is encoded in the Title using '|' as a separator).");
-
-
-                if (Button("Native", buttonSize, "Switch to the native Stationeers IC10 editor."))
-                    LibraryWindow.Window.SwitchToNativeEditor();
-
+                DrawOverview();
                 ImGui.EndTabItem();
             }
             if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
@@ -82,10 +110,43 @@ public static class HelpWindow
             if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
                 _tabIndex = 3;
 
+            if (ImGui.BeginTabItem("Version Control", _TabFlags(4)))
+            {
+                DrawVersionControl();
+                ImGui.EndTabItem();
+            }
+            if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
+                _tabIndex = 4;
         }
         ImGui.EndTabBar();
 
         ImGui.End();
+    }
+
+    public static void DrawOverview()
+    {
+        using var _ = new ScopedChild("");
+
+        Heading("IC10 Editor");
+        ImGui.TextWrapped(
+            "A code editor for Stationeers IC10 programs with syntax highlighting, "
+            + "auto-completion, undo/redo, VIM bindings, and built-in version control."
+        );
+
+        SubHeading("Quick Tips");
+        Bullet("Click 'Commit' in the Library window to snapshot all scripts.");
+        Bullet("Right-click file names or folders in the Library for context actions.");
+        Bullet("Folders are virtual — files stay at their original path on disk (the Title encodes the path with the configured separator).");
+        Bullet("Use Ctrl+Click on a hash code/name to open its Stationpedia page.");
+        Bullet("See the 'Version Control' tab for details on history and diffs.");
+
+        SubHeading("Limits");
+        Bullet("IC10 programs: max 128 lines, 90 chars/line, 4096 bytes total.", ColDim);
+        Bullet("These limits can be toggled in the Config tab.", ColDim);
+
+        ImGui.NewLine();
+        if (Button("Native Editor", new Vector2(200, 0), "Switch to the built-in Stationeers IC10 editor."))
+            LibraryWindow.Window.SwitchToNativeEditor();
     }
 
     public static void DrawConfig()
@@ -134,40 +195,41 @@ public static class HelpWindow
     public static void DrawKeybindings()
     {
         using var _ = new ScopedChild("");
-        ImGui.TextWrapped(
-            "\nKeyboard Shortcuts:\n"
-                + "\n"
-                + "Arrow Keys            Move caret\n"
-                + "Home/End              Move caret to start/end of line\n"
-                + "Page Up/Down          Move caret up/down by 20 lines\n"
-                + "Shift+Arrow           Select text while moving caret\n"
-                + "Tab                   Autocomplete/Indent\n"
-                + "Ctrl + Q              Quit (no confirm, see note below)\n"
-                + "Ctrl + W              Close tab (only for library code tabs)\n"
-                + "Ctrl + S              Save\n"
-                + "Ctrl + E              Motherboard: Save + export code to ic chip\n"
-                + "Ctrl + E              Library Tab: Apply code to Motherboard tab\n"
-                + "Ctrl + Z              Undo\n"
-                + "Ctrl + Y              Redo\n"
-                + "Ctrl + C              Copy selected code\n"
-                + "Ctrl + V              Paste code from clipboard\n"
-                + "Ctrl + A              Select all code\n"
-                + "Ctrl + X              Cut selected code\n"
-                + "Ctrl + Arrow          Move caret by word\n"
-                + "Ctrl + Click          Open Stationpedia page of word at cursor\n"
-                + "Ctrl + Space          Next tab\n"
-                + "Ctrl + Shift + Space  Previous tab\n"
-                + "Ctrl + Number         Switch to tab <Number>\n\n"
+
+        Heading("Navigation");
+        KeyRow("Arrow Keys",            "Move caret");
+        KeyRow("Home / End",            "Start / end of line");
+        KeyRow("Page Up / Down",        "Move caret by 20 lines");
+        KeyRow("Ctrl + Arrow",          "Move caret by word");
+
+        Heading("Selection & Editing");
+        KeyRow("Shift + Arrow",         "Select text");
+        KeyRow("Tab",                   "Autocomplete / indent");
+        KeyRow("Ctrl + A",              "Select all");
+        KeyRow("Ctrl + C",              "Copy");
+        KeyRow("Ctrl + X",              "Cut");
+        KeyRow("Ctrl + V",              "Paste");
+        KeyRow("Ctrl + Z",              "Undo");
+        KeyRow("Ctrl + Y",              "Redo");
+
+        Heading("Files & Tabs");
+        KeyRow("Ctrl + S",              "Save");
+        KeyRow("Ctrl + E",              "Export to IC chip (Motherboard tab)");
+        KeyRow("Ctrl + E",              "Apply to Motherboard (Library tab)");
+        KeyRow("Ctrl + W",              "Close tab (library tabs only)");
+        KeyRow("Ctrl + Q",              "Quit (no confirmation)");
+        KeyRow("Ctrl + Space",          "Next tab");
+        KeyRow("Ctrl + Shift + Space",  "Previous tab");
+        KeyRow("Ctrl + Number",         "Switch to tab N");
+
+        Heading("Other");
+        KeyRow("Ctrl + Click",          "Open Stationpedia page for word at cursor");
+
+        ImGui.NewLine();
+        ImGui.TextColored(ColDim,
+            "Note: Closing via Ctrl+Q or Cancel does not confirm — but you can "
+            + "reopen the editor and Undo (Ctrl+Z) to recover."
         );
-
-        ImGui.Separator();
-
-        ImGui.TextWrapped(
-            "\nNotes:\n"
-                + "\n"
-                + "Closing the editor via Ctrl+Q key or Cancel button will not ask for confirmation, BUT you can always reopen the editor and Undo (Ctrl+Z) to get the state before cancelling.\n"
-        );
-
     }
     public static void DrawVIM()
     {
@@ -175,20 +237,59 @@ public static class HelpWindow
         if (Config.Bool("VIM bindings enabled", IC10EditorPlugin.VimBindings) && !VimEnabled)
             LibraryWindow.Window.ActiveEditor.KeyHandler.Mode = KeyMode.Insert;
 
+        Heading("VIM Mode");
+
+        SubHeading("Movements (with optional count prefix)");
+        ImGui.TextColored(ColKey, "  h  j  k  l  w  b  0  $  gg  G  *  #  <C-u>  <C-d>");
+
+        SubHeading("Editing (with optional count + motion/search)");
+        ImGui.TextColored(ColKey, "  i  I  a  A  c  C  d  D  dd  o  O  x  y  yy  p  ~  <<  >>  u  <C-r>");
+
+        SubHeading("Search");
+        ImGui.TextColored(ColKey, "  f  t  gf");
+
+        SubHeading("Commands");
+        ImGui.TextColored(ColKey, "  .  ;  n  N  :w  :wq  :q");
+
+        ImGui.NewLine();
+        Bullet("'gf' opens the Stationpedia page for the hash/name at cursor.", ColDim);
+    }
+
+    public static void DrawVersionControl()
+    {
+        using var _ = new ScopedChild("");
+
+        Heading("Version Control (Fossil)");
         ImGui.TextWrapped(
-            "\nVIM Mode - Supported Commands:\n"
-                + "\n"
-                + "Movements (with optional number prefix):\n"
-                + "h j, k, l, w, b, 0, $, gg, G, *, #, <C-u>, <C-d>\n\n"
-                + "Editing (with optional number and movement or search):\n"
-                + "i I a A c C d D dd o O x y yy p ~ << >> u <C-r>\n\n"
-                + "Search:\n"
-                + "f t gf\n\n"
-                + "Other:\n"
-                + ". ; n N :w :wq :q\n\n"
-                + "Notes:\n"
-                + "'gf' opens Stationpedia page of hash/name at cursor\n\n"
+            "The editor uses Fossil SCM to track script changes. "
+            + "Fossil is downloaded automatically on first use."
         );
+
+        SubHeading("Committing");
+        Bullet("Click 'Commit' in the Library window to snapshot all scripts.");
+        Bullet("Each commit stores the current state of every script file.");
+        Bullet("A custom commit message can be provided.");
+
+        SubHeading("File States");
+        ImGui.TextColored(ColGreen,  "  o Unchanged");
+        ImGui.SameLine();
+        ImGui.TextColored(ColDim, " — file matches the last commit.");
+        ImGui.TextColored(ColYellow, "  o Modified ");
+        ImGui.SameLine();
+        ImGui.TextColored(ColDim, " — file has been edited since the last commit.");
+        ImGui.TextColored(ColRed,    "  o Untracked");
+        ImGui.SameLine();
+        ImGui.TextColored(ColDim, " — new file, not yet committed.");
+
+        SubHeading("History & Diffs");
+        Bullet("Right-click a file in the Library and choose 'History' to view past versions.");
+        Bullet("Select a version to preview its code.");
+        Bullet("Diffs show what changed between versions.");
+
+        SubHeading("Backups");
+        Bullet($"Backups of all library scripts are created at every game start.");
+        Bullet($"Up to {FossilVCS.KeepBackupCount} automatic backups of the repository are kept.");
+        Bullet("Backups are stored in <GameDir>/BepInEx/cache/ic10editor/backups");
     }
 }
 
