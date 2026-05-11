@@ -1203,7 +1203,7 @@ public class EditorTab
         ParentWindow = window;
         editor.ParentTab = this;
         Editors = new List<Editor> { editor };
-        VersionWindow = new FileHistoryWindow(Script);
+        VersionWindow = null;
     }
 
     public int AddEditor(Editor editor)
@@ -1439,7 +1439,10 @@ public class EditorWindow
         ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 2 * ImGui.GetStyle().ItemSpacing.x);
 
         if (Button("History", buttonSize, "Version History (Ctrl+H)", !HasFileVCS))
+        {
+            ActiveTab.VersionWindow = new FileHistoryWindow(ActiveTab.Script);
             ActiveTab.VersionWindow.Open();
+        }
 
         ImGui.SameLine();
 
