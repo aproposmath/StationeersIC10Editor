@@ -373,6 +373,14 @@ public class FossilVCS
         return diff;
     }
 
+    public static async UniTask<string> GetDiffJson(string path, string fromVersion, string toVersion = null)
+    {
+        var cmd = $"diff --context 0 --from {fromVersion} --json \"{path}/instruction.xml\"";
+        if (!string.IsNullOrEmpty(toVersion))
+            cmd += $" --to {toVersion}";
+        return await RunAsync(cmd);
+    }
+
 }
 
 public enum FileState
@@ -392,28 +400,56 @@ public class FileVersion
     public string Message;
     public VersionedScript VersionedScript;
     public InstructionData Library = null;
+    public List<DiffLine> DiffLines = null;
+    public int LineOffset;
 
     public async UniTask LoadLibrary()
     {
         if (Library != null)
             return;
-        var _RawContent = await FossilVCS.RunAsync($"cat \"{Path}\\instruction.xml\" -r {Hash}");
+        var rawXml = await FossilVCS.RunAsync($"cat \"{Path}\\instruction.xml\" -r {Hash}");
         var xmlSerializer = new XmlSerializer(typeof(InstructionData));
-        using var textReader = new StringReader(_RawContent);
+        using var textReader = new StringReader(rawXml);
         Library = (InstructionData)xmlSerializer.Deserialize(textReader);
+        var lines = rawXml.Replace("\r", "").Split('\n');
+        LineOffset = 0;
+        for (var i = 0; i < lines.Length; i++)
+            if (lines[i].Contains("<Instructions>"))
+            {
+                LineOffset = i;
+                break;
+            }
     }
 
     public string Label => string.IsNullOrEmpty(Date) || string.IsNullOrEmpty(Message) ? $"{Date}{Message}" : $"{Date} - {Message}";
 }
 
 
+public enum DiffViewMode { Code, InlineDiff, DiffOnly }
+
+public enum DiffTag { Equal, Added, Removed }
+
+public struct DiffLine
+{
+    public DiffTag Tag;
+    public StyledLine Line;
+    public int? OldLineNum;
+    public int? NewLineNum;
+}
+
 public class FileHistoryWindow
 {
     public bool IsOpen = false;
     public List<FileVersion> Versions = new List<FileVersion>();
     private Editor _previewEditor;
+    private Editor _compareEditor; // hidden, for formatting the previous version
     public FileVersion SelectedVersion = null;
     public VersionedScript Library;
+    private DiffViewMode _viewMode = DiffViewMode.Code;
+    private bool _diffLoading = false;
+
+    static readonly uint ColorAdded = ICodeFormatter.ColorFromHTML("#1a3a1a");
+    static readonly uint ColorRemoved = ICodeFormatter.ColorFromHTML("#3a1a1a");
 
     public FileHistoryWindow(VersionedScript library)
     {
@@ -441,10 +477,122 @@ public class FileHistoryWindow
         IsOpen = false;
     }
 
+    private void EnsureEditors()
+    {
+        if (_previewEditor == null)
+        {
+            _previewEditor = new Editor(null, Library);
+            _previewEditor.IsReadOnly = true;
+        }
+        if (_compareEditor == null)
+        {
+            _compareEditor = new Editor(null, Library);
+            _compareEditor.IsReadOnly = true;
+        }
+    }
+
     public async UniTaskVoid LoadVersionCode(FileVersion version)
     {
+        _diffLoading = true;
+
         await version.LoadLibrary();
-        _previewEditor.ResetCode(version.Library.Instructions, false);
+
+        _previewEditor.ResetCode(version.Library.Instructions ?? "", false);
+
+        var idx = Versions.IndexOf(version);
+        if (idx >= 0 && idx < Versions.Count - 1)
+        {
+            var prev = Versions[idx + 1];
+            await prev.LoadLibrary();
+            _compareEditor.ResetCode(prev.Library.Instructions ?? "", false);
+            _compareEditor.Update();
+            _previewEditor.Update();
+
+            try
+            {
+                if (version.DiffLines == null)
+                {
+                    var path = Library.Data.DirectoryPath.Name;
+                    var toArg = string.IsNullOrEmpty(version.Hash) ? null : version.Hash;
+                    var diffJson = await FossilVCS.GetDiffJson(path, prev.Hash, toArg);
+                    var oldOffset = prev.LineOffset;
+                    var newOffset = version.Hash == "" ? oldOffset : version.LineOffset;
+                    version.DiffLines = ParseDiff(diffJson, oldOffset, newOffset, _compareEditor.Lines, _previewEditor.Lines);
+                }
+            }
+            catch (Exception ex)
+            {
+                L.Warning($"Failed to get fossil diff: {ex.Message}");
+            }
+        }
+
+        _diffLoading = false;
+    }
+
+    private unsafe void DrawDiff(bool showUnchanged)
+    {
+        if (SelectedVersion == null)
+            return;
+
+        if (SelectedVersion.DiffLines == null)
+        {
+            ImGui.TextUnformatted(_diffLoading ? "Loading diff..." : "No previous version to compare.");
+            return;
+        }
+
+        var diffLines = SelectedVersion.DiffLines;
+
+        var lines = showUnchanged ? diffLines : diffLines.Where(d => d.Tag != DiffTag.Equal).ToList();
+        if (lines.Count == 0)
+        {
+            ImGui.TextUnformatted("No changes.");
+            return;
+        }
+
+        float lineHeight = Settings.LineHeightWithSpacing;
+        var contentSize = new Vector2((9 + lines.Max(d => d.Line.Length)) * Settings.CharWidth + 20, lines.Count * lineHeight);
+        ImGui.SetNextWindowContentSize(contentSize);
+        ImGui.BeginChild("##DiffView", ImGui.GetContentRegionAvail(), true, ImGuiWindowFlags.HorizontalScrollbar);
+
+        var drawList = ImGui.GetWindowDrawList();
+        var clipper = new ImGuiListClipperPtr(ImGuiNative.ImGuiListClipper_ImGuiListClipper());
+        clipper.Begin(lines.Count);
+
+        while (clipper.Step())
+        {
+            for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
+            {
+                var dl = lines[i];
+                var pos = ImGui.GetCursorScreenPos();
+
+                if (dl.Tag != DiffTag.Equal)
+                {
+                    var bg = dl.Tag == DiffTag.Added ? ColorAdded : ColorRemoved;
+                    drawList.AddRectFilled(pos, new Vector2(pos.x + contentSize.x, pos.y + lineHeight), bg);
+                }
+
+                // Draw line numbers + separator + prefix
+                var oldNum = dl.OldLineNum.HasValue ? dl.OldLineNum.Value.ToString().PadLeft(3) : "   ";
+                var newNum = dl.NewLineNum.HasValue ? dl.NewLineNum.Value.ToString().PadLeft(3) : "   ";
+                var prefix = dl.Tag switch { DiffTag.Added => "+", DiffTag.Removed => "-", _ => " " };
+                var lineNumColor = ICodeFormatter.ColorLineNumber;
+                var prefixColor = dl.Tag switch { DiffTag.Added => 0xFF40FF40u, DiffTag.Removed => 0xFF4040FFu, _ => 0xFF808080u };
+                drawList.AddText(pos, lineNumColor, oldNum);
+                drawList.AddText(new Vector2(pos.x + Settings.CharWidth * 4, pos.y), lineNumColor, newNum);
+                float sepX = pos.x + Settings.CharWidth * 7.5f;
+                drawList.AddLine(new Vector2(sepX, pos.y), new Vector2(sepX, pos.y + lineHeight), lineNumColor, 1.0f);
+                drawList.AddText(new Vector2(pos.x + Settings.CharWidth * 8, pos.y), prefixColor, prefix);
+
+                var textPos = new Vector2(pos.x + Settings.CharWidth * 10, pos.y);
+                dl.Line.DrawText(textPos, i);
+
+                pos.y += lineHeight;
+                ImGui.SetCursorScreenPos(pos);
+            }
+        }
+
+        clipper.End();
+        ImGui.EndChild();
     }
 
     public void Draw()
@@ -463,11 +611,7 @@ public class FileHistoryWindow
                 if (ImGui.Selectable(version.Label, SelectedVersion == version) && SelectedVersion != version)
                 {
                     SelectedVersion = version;
-                    if (_previewEditor == null)
-                    {
-                        _previewEditor = new Editor(null, Library);
-                        _previewEditor.IsReadOnly = true;
-                    }
+                    EnsureEditors();
                     _previewEditor.ResetCode("# Loading version...", false);
                     LoadVersionCode(version).Forget();
                 }
@@ -478,15 +622,31 @@ public class FileHistoryWindow
 
         using (new Pane("LibrarySearchPreview", 1.0f, -1))
         {
-            if (_previewEditor != null)
+            if (SelectedVersion != null)
             {
-                _previewEditor.Update();
-                using var __ = new ScopedStyleVar(ImGuiStyleVar.ChildBorderSize, 0);
-                _previewEditor.Draw(
-                    ImGui.GetCursorScreenPos(),
-                    ImGui.GetContentRegionAvail(),
-                    "##LibraryVersionPreviewEditor"
-                );
+                if (ImGui.RadioButton("Code", _viewMode == DiffViewMode.Code)) _viewMode = DiffViewMode.Code;
+                ImGui.SameLine();
+                if (ImGui.RadioButton("Inline Diff", _viewMode == DiffViewMode.InlineDiff)) _viewMode = DiffViewMode.InlineDiff;
+                ImGui.SameLine();
+                if (ImGui.RadioButton("Diff Only", _viewMode == DiffViewMode.DiffOnly)) _viewMode = DiffViewMode.DiffOnly;
+
+                if (_viewMode == DiffViewMode.Code)
+                {
+                    if (_previewEditor != null)
+                    {
+                        _previewEditor.Update();
+                        using var __ = new ScopedStyleVar(ImGuiStyleVar.ChildBorderSize, 0);
+                        _previewEditor.Draw(
+                            ImGui.GetCursorScreenPos(),
+                            ImGui.GetContentRegionAvail(),
+                            "##LibraryVersionPreviewEditor"
+                        );
+                    }
+                }
+                else
+                {
+                    DrawDiff(_viewMode == DiffViewMode.InlineDiff);
+                }
             }
         }
 
@@ -509,5 +669,57 @@ public class FileHistoryWindow
             Close();
 
         ImGui.End();
+    }
+
+    public static List<DiffLine> ParseDiff(string json, int oldOffset, int newOffset,
+        List<StyledLine> oldLines, List<StyledLine> newLines)
+    {
+        var root = Newtonsoft.Json.Linq.JArray.Parse(json);
+        if (root[0]["diff"] is not Newtonsoft.Json.Linq.JArray diffArray)
+            return [];
+
+        var result = new List<DiffLine>();
+        int oldCodeCount = oldLines.Count, newCodeCount = newLines.Count;
+
+        StyledLine GetOld(int codeIdx) => codeIdx >= oldOffset && codeIdx < oldCodeCount + oldOffset ? oldLines[codeIdx - oldOffset] : new StyledLine("");
+        StyledLine GetNew(int codeIdx) => codeIdx >= newOffset && codeIdx < newCodeCount + newOffset ? newLines[codeIdx - newOffset] : new StyledLine("");
+
+        void AddLine(DiffTag tag, int? oldIdx = null, int? newIdx = null)
+        {
+            if ((tag == DiffTag.Equal || tag == DiffTag.Removed) && oldIdx < oldOffset)
+                return;
+
+            if ((tag == DiffTag.Equal || tag == DiffTag.Added) && newIdx < newOffset)
+                return;
+
+            result.Add(new DiffLine
+            {
+                Tag = tag,
+                Line = tag == DiffTag.Removed ? GetOld(oldIdx.Value) : GetNew(newIdx.Value),
+                OldLineNum = oldIdx - oldOffset,
+                NewLineNum = newIdx - newOffset,
+            });
+        }
+
+        var oldLine = 0;
+        var newLine = 0;
+        var i = 0;
+        while (i < diffArray.Count)
+        {
+            var op = diffArray[i++].ToObject<int>();
+            if (op == 0) break;
+            if (op == 1)
+                for (var k = 0; k < diffArray[i].ToObject<int>(); k++)
+                    AddLine(DiffTag.Equal, oldLine++, newLine++);
+            if (op == 2) AddLine(DiffTag.Equal, oldLine++, newLine++);
+            if (op == 3) AddLine(DiffTag.Added, null, newLine++);
+            if (op == 5 && GetOld(oldLine).Text != GetNew(newLine).Text)
+            {
+                AddLine(DiffTag.Removed, oldLine++);
+                AddLine(DiffTag.Added, null, newLine++);
+            }
+            i++;
+        }
+        return [.. result.Where(d => (d.OldLineNum == null || d.OldLineNum >= 0) && (d.NewLineNum == null || d.NewLineNum >= 0))];
     }
 }
