@@ -968,7 +968,6 @@ public class Editor
     {
         code = code.Replace("\r", string.Empty);
         ClearCode(pushUndo);
-        var lines = code.Split('\n');
         var formatter = CodeFormatters.GetFormatterByMatching(code);
         if (typeof(ICodeFormatter) != CodeFormatter.GetType())
         {
