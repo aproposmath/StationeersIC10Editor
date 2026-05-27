@@ -309,6 +309,8 @@ public class IC10CodeFormatter : StaticFormatter
     public void UpdateJumpTarget()
     {
         LineStyles.Clear();
+        if(Editor.CaretPos.Line < 0 || Editor.CaretPos.Line >= Lines.Count)
+            return;
         var line = Lines[Editor.CaretPos.Line] as IC10Line;
         if (line == null || !line.IsInstruction || line.NumCodeTokens < 2 || !line.IsJump)
             return;
