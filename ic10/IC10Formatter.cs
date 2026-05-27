@@ -216,7 +216,7 @@ public class IC10CodeFormatter : StaticFormatter
                 IC10Utils.IsStringExpression(txt)
             )
                 dt = DataType.Number;
-            else if (IC10Utils.IsDeviceChannel(txt))
+            else if (IsDeviceNetwork(txt))
                 dt = DataType.Device;
             else
             {
@@ -279,6 +279,31 @@ public class IC10CodeFormatter : StaticFormatter
         }
 
         line.UpdateTokenColors(types);
+    }
+
+    public bool IsDeviceNetwork(string text)
+    {
+        if (!text.Contains(":"))
+            return false;
+
+        var parts = text.Split(new char[] { ':' }, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2)
+            return false;
+
+        if (!Int32.TryParse(parts[1], out int networkId) || networkId < 0)
+            return false;
+
+        var type = IC10Utils.GetType(parts[0]);
+        if (type.Has(DataType.Device) || type.Has(DataType.Alias) || type.Has(DataType.Register))
+            return true;
+
+        if (devAliases.ContainsKey(parts[0]))
+            return true;
+
+        if (regAliases.ContainsKey(parts[0]))
+            return true;
+
+        return false;
     }
 
     public void UpdateJumpTarget()
