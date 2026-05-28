@@ -229,20 +229,6 @@ public abstract class ICodeFormatter
         if (LineStyles.TryGetValue(lineIndex, out Style style))
             lineStyle = style;
 
-        if (lineStyle.Color > 0)
-        {
-            if (style.Color > 0)
-            {
-                drawList.AddLine(
-                    pos,
-                    pos + LineHeight * Vector2.up,
-                    style.Color,
-                    5.0f
-                );
-            }
-        }
-
-
         if (lineStyle.Background > 0)
         {
             drawList.AddRectFilled(
@@ -257,6 +243,20 @@ public abstract class ICodeFormatter
                 style.Background
             );
         }
+
+        if (lineStyle.Color > 0)
+        {
+            if (style.Color > 0)
+            {
+                drawList.AddLine(
+                    pos,
+                    pos + LineHeight * Vector2.up,
+                    style.Color,
+                    5.0f
+                );
+            }
+        }
+
 
         line.DrawBackground(pos, lineIndex);
         // Calculate Selection Rect

@@ -308,8 +308,18 @@ public class IC10CodeFormatter : StaticFormatter
 
     public void UpdateJumpTarget()
     {
-        LineStyles.Clear();
-        if(Editor.CaretPos.Line < 0 || Editor.CaretPos.Line >= Lines.Count)
+        var style = new Style(ColorLabel);
+
+        foreach (var i in new List<int>(LineStyles.Keys))
+        {
+            var lineStyle = LineStyles[i];
+            if (lineStyle.Equals(style))
+                LineStyles.Remove(i);
+            else if (lineStyle.Color == style.Color)
+                LineStyles[i] = new Style { Background = lineStyle.Background };
+        }
+
+        if (Editor.CaretPos.Line < 0 || Editor.CaretPos.Line >= Lines.Count)
             return;
         var line = Lines[Editor.CaretPos.Line] as IC10Line;
         if (line == null || !line.IsInstruction || line.NumCodeTokens < 2 || !line.IsJump)
@@ -341,7 +351,10 @@ public class IC10CodeFormatter : StaticFormatter
         if (isRelative)
             targetLine += Editor.CaretPos.Line;
 
-        LineStyles[targetLine] = new Style(ColorLabel);
+        if (LineStyles.ContainsKey(targetLine))
+            LineStyles[targetLine] = new Style(ColorLabel, LineStyles[targetLine].Background);
+        else
+            LineStyles[targetLine] = style;
     }
 
     public void UpdateDataType(string newToken, bool defer = true)
