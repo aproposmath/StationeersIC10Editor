@@ -145,26 +145,6 @@
         "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/v0.9.3/IC10Editor-v0.9.3.zip",
         "version": "0.9.3"
     },
-    "sha256:7d51dfe5c72959d72f36fcb15514288103145ac39e985bae89fb09811daf718e": {
-        "author": "aproposmath",
-        "branch": [
-            "debug"
-        ],
-        "depends_on": [],
-        "digest": "sha256:7d51dfe5c72959d72f36fcb15514288103145ac39e985bae89fb09811daf718e",
-        "id": "com.github.aproposmath.StationeersIC10Editor",
-        "name": "IC10 Editor",
-        "tag": [
-            "IC10",
-            "Editor",
-            "Code",
-            "BepInEx",
-            "VIM",
-            "StationeersLaunchPad"
-        ],
-        "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/debug/IC10Editor-debug.zip",
-        "version": "0.9.9.4-dev"
-    },
     "sha256:857c6d7f627ebfba99c5bf1de4e86578e244704d9d58c115639cbe0668a7338c": {
         "author": "aproposmath",
         "branch": [],
@@ -237,6 +217,26 @@
         ],
         "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/v0.8.8/IC10Editor-v0.8.8.zip",
         "version": "0.8.8"
+    },
+    "sha256:a8dd78c22c550b76eb51e09abd2b4a1e2587f67d022d356504c0b976eb5ac237": {
+        "author": "aproposmath",
+        "branch": [
+            "debug"
+        ],
+        "depends_on": [],
+        "digest": "sha256:a8dd78c22c550b76eb51e09abd2b4a1e2587f67d022d356504c0b976eb5ac237",
+        "id": "com.github.aproposmath.StationeersIC10Editor",
+        "name": "IC10 Editor",
+        "tag": [
+            "IC10",
+            "Editor",
+            "Code",
+            "BepInEx",
+            "VIM",
+            "StationeersLaunchPad"
+        ],
+        "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/debug/IC10Editor-debug.zip",
+        "version": "0.9.9.5-dev"
     },
     "sha256:b88ce76fd399b9c8a834b4fb72b512f8f0a93afc977c969d7cfb4c4a2f9af615": {
         "author": "aproposmath",
