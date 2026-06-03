@@ -577,7 +577,15 @@ public static class LibraryWindow
 
         DrawLibrarySearchResults();
         ImGui.SameLine();
-        DrawSelectedLibrary();
+        try
+        {
+            DrawSelectedLibrary();
+        }
+        catch (Exception e)
+        {
+            L.Error($"Error drawing selected library: {e}");
+            SelectedNode = null;
+        }
 
         if (ImGui.IsWindowFocused() && ImGui.IsKeyPressed(ImGuiKey.Escape))
             IsOpen = false;
@@ -762,17 +770,35 @@ public static class LibraryWindow
     }
     public static void SelectLibrary(LibNode node)
     {
+        L.Debug($"SelectLibrary: {node}, is null: {node == null}");
+        L.Debug($"SelectedNode before: {SelectedNode}");
+        L.Debug($"IsFolder: {node?.IsFolder}");
+        L.Debug($"Script: {node?.Script}");
         if (node.IsFolder)
             return;
         SelectedNode = node;
         if (node == null)
             return;
+        L.Debug($"Selected library: {node.FullName}, state: {node.Script.State}");
+        L.Debug($"Selected library path: {node.Script.Path}");
+        L.Debug($"Selected library title: {node.Script.Title}");
+        L.Debug($"Selected library author: {node.Script.Data.Author}");
+        L.Debug($"Selected library description: {node.Script.Data.Description}");
+        L.Debug($"Selected library date: {node.Script.Date}");
+        L.Debug($"Selected library workshop ID: {node.Script.Data.WorkshopFileHandle}");
+        L.Debug($"Selected library tooltip: {node.Script.Tooltip}");
+        L.Debug($"SelectedNode after: {SelectedNode}");
+        L.Debug($"Preview editor before: {_previewEditor}, isNull: {_previewEditor == null}");
         if (_previewEditor == null)
         {
+            L.Debug($"Creating new preview editor for library");
             _previewEditor = new Editor(Window.ActiveEditor.KeyHandler, node.Script);
             _previewEditor.IsReadOnly = true;
         }
+        L.Debug($"Resetting preview editor code to library code");
+        L.Debug($"Library code: {node.Script.Data.Instructions}");
         _previewEditor.ResetCode(node.Script.Data.Instructions ?? "", false);
+        L.Debug($"Preview editor after: {_previewEditor}, isNull: {_previewEditor == null}");
     }
 
     public static List<VersionedScript> LoadLocalScripts()
@@ -1080,13 +1106,16 @@ public static class LibraryWindow
 
         if (SelectedNode != null)
         {
+            L.Debug($"Drawing selected library: {SelectedNode.FullName}");
             var width = ImGui.GetContentRegionAvail().x;
             var script = SelectedNode.Script;
+            L.Debug($"Selected library script: {script.Path}, title: {script.Title}, author: {script.Data.Author}, date: {script.Date}, status: {script.StatusString}, workshop ID: {script.Data.WorkshopFileHandle}");
             var spacing = ImGui.GetStyle().ItemSpacing;
             var buttonPos = ImGui.GetCursorPos() + new Vector2(width - 3 * buttonSize.x - 2 * ImGui.GetStyle().ItemSpacing.x, 0);
             var buttonPos2 = buttonPos + buttonSize + spacing;
             var status = script.StatusString;
             var isWorkshop = script.State == FileState.Workshop;
+            L.Debug($"Is workshop: {isWorkshop}");
 
             if (!isWorkshop && script.Data.WorkshopFileHandle != 0)
                 status += ", Published";
@@ -1122,6 +1151,8 @@ public static class LibraryWindow
             Text($"Name: ", width / 2);
             ImGui.SameLine();
 
+            L.Debug($"Drawing library title, is workshop: {isWorkshop}, title: {script.Title}");
+
             if (isWorkshop)
                 ImGui.Text(script.Title);
             else
@@ -1133,6 +1164,8 @@ public static class LibraryWindow
                 }
             }
 
+            L.Debug($"Drawing library description, is workshop: {isWorkshop}, description: {script.Data.Description}");
+
             var numLines = Mathf.Clamp(script.Data.Description.Split('\n').Length, 2, 5);
             var height = (numLines - 1) * LineHeightWithSpacing + LineHeight;
             ImGui.InputTextMultiline("", ref script.Data.Description, 1024, new Vector2(width, height), isWorkshop ? ImGuiInputTextFlags.ReadOnly : ImGuiInputTextFlags.None);
@@ -1141,13 +1174,17 @@ public static class LibraryWindow
             if (ShowTooltip && ImGui.IsItemHovered())
                 ImGui.SetTooltip("Description, click 'Save' to apply changes");
 
+            L.Debug($"Drawing library code preview, is workshop: {isWorkshop}, code length: {script.Data.Instructions?.Length}");
+
             _previewEditor.Update();
+            L.Debug($"Preview editor code before reset: {_previewEditor.Code}, length: {_previewEditor.Code.Length}");
             using var _cbs = new ScopedStyleVar(ImGuiStyleVar.ChildBorderSize, 0);
             _previewEditor.Draw(
                 ImGui.GetCursorScreenPos(),
                 ImGui.GetContentRegionAvail(),
                 "##LibraryPreviewEditor"
             );
+            L.Debug($"Finished drawing selected library: {SelectedNode.FullName}");
         }
     }
 }
