@@ -889,6 +889,20 @@ public static class LibraryWindow
         var workshopDone = await loadWorkshopTask;
         while (workshopDone)
             workshopDone = await LoadWorkshopScripts(++page);
+
+        // iterate over all scripts in all editor tabs and replace the VersionedScript reference with the newly loaded one (to update file states and workshop info)
+        foreach (var tab in Window.Tabs)
+            foreach (var editor in tab.Editors)
+                if (editor.Library != null)
+                {
+                    var path = editor.Library.Path;
+                    if (VersionedScriptsByPath.TryGetValue(path, out var updatedScript))
+                    {
+                        editor.Target = updatedScript;
+                        if (editor.IsReadOnly)
+                            editor.ResetCode(updatedScript.Data.Instructions ?? "", false);
+                    }
+                }
     }
 
     public static void Open()
