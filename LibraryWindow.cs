@@ -584,6 +584,7 @@ public static class LibraryWindow
         catch (Exception e)
         {
             L.Error($"Error drawing selected library: {e}");
+            L.Error(e.StackTrace);
             SelectedNode = null;
         }
 
