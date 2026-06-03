@@ -117,7 +117,7 @@ public class VersionedScript(InstructionData data)
                 sb.AppendLine("");
                 sb.AppendLine("This script has changed since the last version");
             }
-            return sb.ToString();
+            return sb.ToString().Replace("%", "%%");
         }
     }
 }
