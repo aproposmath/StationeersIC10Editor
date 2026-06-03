@@ -222,7 +222,10 @@ public class IC10EditorPlugin : BaseUnityPlugin
     private void OnDestroy()
     {
 #if DEBUG
-        L.Info($"OnDestroy of ${ThisModInfo.Info}");
+        if (!ModUtils.IsLoadedByScriptEngine(typeof(IC10EditorPlugin)))
+            return;
+
+        L.Info($"OnDestroy of ${ThisModInfo.Info}, cleaning up patches");
         IC10EditorPatches.Cleanup();
         _harmony.UnpatchSelf();
 #endif
