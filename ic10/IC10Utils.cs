@@ -447,15 +447,21 @@ public class IC10Utils
             {
                 string text = t.Text;
                 string suffix = "";
-                if (text.Contains(":"))
+                var isComment = text.TrimStart().StartsWith("#");
+                if (!isComment && text.Contains(":"))
                 {
                     suffix = text.Substring(text.IndexOf(':'));
                     text = text.Substring(0, text.IndexOf(':'));
                 }
                 if (defines.TryGetValue(text, out string value) && value != null)
                     text = value;
-                if (!text.TrimStart().StartsWith("#"))
+
+                if (!isComment || text.EndsWith("# KEEP"))
+                {
+                    if (isComment)
+                        text = text.Substring(0, text.IndexOf("# KEEP")).TrimEnd();
                     lineStr += text.Trim() + suffix + " ";
+                }
             }
             newCode.AppendLine(lineStr.Trim());
         }
