@@ -1084,7 +1084,6 @@ public static class LibraryWindow
             var script = SelectedNode.Script;
             var spacing = ImGui.GetStyle().ItemSpacing;
             var buttonPos = ImGui.GetCursorPos() + new Vector2(width - 3 * buttonSize.x - 2 * ImGui.GetStyle().ItemSpacing.x, 0);
-            var buttonPos2 = buttonPos + buttonSize + spacing;
             var status = script.StatusString;
             var isWorkshop = script.State == FileState.Workshop;
 
@@ -1105,10 +1104,13 @@ public static class LibraryWindow
                 LoadScript(script, null, true);
 
 
-            // ImGui.SetCursorPosX(width - 2 * buttonSize.x);
-            ImGui.SetCursorPos(buttonPos2);
+            ImGui.SetCursorPos(buttonPos + new Vector2(0, buttonSize.y + 2 * spacing.y));
             if (Button("Save", buttonSize, "Save description and title", isWorkshop))
                 script.Save();
+
+            ImGui.SameLine();
+            if (Button("Commit", buttonSize, "Save current state in version control system", script.State == FileState.Unchanged || isWorkshop))
+                Commit(SelectedNode);
 
             ImGui.SameLine();
             if (Button("Publish", buttonSize, "Publish the script to the Steam Workshop", isWorkshop))
