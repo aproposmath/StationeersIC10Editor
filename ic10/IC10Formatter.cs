@@ -23,6 +23,28 @@ public class IC10CodeFormatter : StaticFormatter
     private HashSet<string> _tokensToUpdate = new HashSet<string>();
     private bool _showRegisterUsage = false;
 
+
+    public Editor _MinifyEditor = null;
+    public Editor MinifyEditor
+    {
+        get
+        {
+            if (_MinifyEditor == null)
+            {
+                var tab = Editor.ParentTab;
+                tab.ClearExtraEditors();
+                _MinifyEditor = new Editor(Editor.KeyHandler);
+                _MinifyEditor.IsReadOnly = true;
+                tab.AddEditor(_MinifyEditor);
+                _MinifyEditor.CodeFormatter = new IC10CodeFormatter();
+                _MinifyEditor.CodeFormatter.Editor = _MinifyEditor;
+            }
+            return _MinifyEditor;
+        }
+    }
+
+    public ICodeFormatter MinifyFormatter => MinifyEditor.CodeFormatter;
+
     public static double MatchingScore(string input)
     {
         // Simple heuristic: count occurrences of IC10-specific keywords
@@ -49,6 +71,7 @@ public class IC10CodeFormatter : StaticFormatter
         {
             UpdateDataType(null, defer: false);
             UpdateRegisterUsage();
+            Minify();
         };
         OnCaretMoved += () => UpdateJumpTarget();
     }
@@ -656,10 +679,37 @@ public class IC10CodeFormatter : StaticFormatter
         DrawRegisterUsage();
     }
 
+    private bool IsMinifyActive = false;
+
+    public void Minify()
+    {
+        if (!IsMinifyActive) return;
+        MinifyEditor.ResetCode(IC10Utils.Minify(Lines));
+        CodeSize = MinifyFormatter.CodeSize;
+    }
+
     public override void DrawButtons()
     {
-        if (ImGui.Button("Minify", Settings.buttonSize))
-            Editor.ResetCode(IC10Utils.Minify(Lines));
+        if (ImGui.Checkbox("Minify", ref IsMinifyActive))
+        {
+            if (IsMinifyActive)
+                Minify();
+            else
+            {
+                Editor.ParentTab.ClearExtraEditors();
+                _MinifyEditor = null;
+            }
+            UpdateCodeSize();
+        }
+        if (ImGui.IsItemHovered() && Settings.ShowTooltip)
+        {
+            ImGui.SetNextWindowSize(
+                new Vector2(40 * Settings.CharWidth, 5 * Settings.LineHeightWithSpacing) + 2 * ImGui.GetStyle().WindowPadding
+            );
+            ImGui.BeginTooltip();
+            ImGui.TextWrapped("Show minified version of the code, which will be used on 'Export'.\n\nAppend '# KEEP' to define/alias/labels lines to keep them.");
+            ImGui.EndTooltip();
+        }
         ImGui.SameLine();
         ImGuiUtils.Checkbox("Registers", ref _showRegisterUsage, "Show register usage");
     }
@@ -717,5 +767,21 @@ public class IC10CodeFormatter : StaticFormatter
             drawList.AddText(startPos + 5 * shift, color, strNumAlias);
             startPos.y += Settings.LineHeightWithSpacing * (i % 4 == 3 ? 1.5f : 1);
         }
+    }
+
+    public override void UpdateCodeSize()
+    {
+        if (IsMinifyActive)
+            CodeSize = MinifyEditor.CodeFormatter.CodeSize;
+        else
+            base.UpdateCodeSize();
+    }
+
+    public override string Compile()
+    {
+        if (IsMinifyActive)
+            return MinifyEditor.CodeFormatter.Compile();
+        else
+            return base.Compile();
     }
 }

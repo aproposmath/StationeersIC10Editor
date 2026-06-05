@@ -160,7 +160,7 @@ public class Editor
     public bool EnforceLineLimit => Settings.EnforceLineLimit && IsMotherboard;
     public bool EnforceByteLimit => Settings.EnforceByteLimit && IsMotherboard;
 
-    public bool LimitExceeded => (EnforceLineLimit && Lines.Count > 128) || (EnforceByteLimit && Code.Length > 4096) || (EnforceLineLengthLimit && Lines.Any(line => line.Text.Length > 90));
+    public bool LimitExceeded => (EnforceLineLimit && CodeSize.NumLines > 128) || (EnforceByteLimit && CodeSize.NumBytes > 4096) || (EnforceLineLengthLimit && CodeSize.MaxLineLength > 90);
 
     public bool HaveSelection => (bool)Selection;
     public KeyHandler KeyHandler;
@@ -181,6 +181,7 @@ public class Editor
     public ICodeFormatter CodeFormatter;
     public string Code => CodeFormatter.RawText;
     public List<StyledLine> Lines => CodeFormatter.Lines;
+    public CodeSize CodeSize => CodeFormatter.CodeSize;
     public string CommandStatus = "";
 
     public EditorTab ParentTab = null;
@@ -984,11 +985,8 @@ public class Editor
         if (PCM)
         {
             if (LimitExceeded)
-            {
                 return LimitExceededMessage;
-            }
-            var code = CodeFormatter.Compile();
-            PCM.InputFinished(code);
+            PCM.InputFinished(Code);
             return "Saved to Motherboard";
         }
         if (Library != null)
@@ -1381,7 +1379,11 @@ public class EditorWindow
         if (IsMotherboard)
         {
             Confirm();
-            MotherboardTab[0].PCM.Export();
+            var code = MotherboardTab[0].CodeFormatter.Compile();
+            var pcm = MotherboardTab[0].PCM;
+            pcm.InputFinished(code);
+            pcm.Export();
+            pcm.InputFinished(Code); // restore uncompiled code on motherboard
             return;
         }
 
@@ -1608,9 +1610,11 @@ public class EditorWindow
             pos.x += (unit.Length + 1) * CharWidth;
         }
 
-        drawLimit(EnforceLineLimit, Lines.Count, 128, "lines,");
-        drawLimit(EnforceLineLengthLimit, Lines.Max(line => line.Text.Length), 90, "chars,");
-        drawLimit(EnforceByteLimit, code.Length + Lines.Count - 1, 4096, "bytes");
+        var size = ActiveTab[0].CodeSize;
+
+        drawLimit(EnforceLineLimit, size.NumLines, 128, "lines,");
+        drawLimit(EnforceLineLengthLimit, size.MaxLineLength, 90, "chars,");
+        drawLimit(EnforceByteLimit, size.NumBytes, 4096, "bytes");
         pos.x += 4 * CharWidth;
 
         ImGui.SetCursorPosX(px0 + pos.x - psx0);

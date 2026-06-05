@@ -12,6 +12,13 @@ using UnityEngine;
 
 using static Settings;
 
+public struct CodeSize
+{
+    public int NumLines;
+    public int MaxLineLength;
+    public int NumBytes;
+}
+
 public abstract class ICodeFormatter
 {
     public static uint ColorDefault = 0xFFFFFFFF;
@@ -28,7 +35,8 @@ public abstract class ICodeFormatter
         Background = 0
     };
 
-    public StyledText Lines = new StyledText();
+    public CodeSize CodeSize = new();
+    public StyledText Lines = [];
     public string RawText => Lines.RawText;
     public StyledLine CurrentLine
     {
@@ -75,6 +83,7 @@ public abstract class ICodeFormatter
             UpdateStatus();
             if (NeedsUpdateAutocomplete())
                 UpdateAutocomplete();
+            UpdateCodeSize();
         };
 
         OnCaretMoved += () =>
@@ -286,6 +295,18 @@ public abstract class ICodeFormatter
     }
 
     public virtual string Compile() => RawText;
+
+    public virtual void UpdateCodeSize()
+    {
+        CodeSize.NumLines = Lines.Count;
+        CodeSize.NumBytes = RawText.Length;
+        CodeSize.MaxLineLength = 0;
+        foreach (var line in Lines)
+        {
+            if (line.Length > CodeSize.MaxLineLength)
+                CodeSize.MaxLineLength = line.Length;
+        }
+    }
 
     public virtual void UpdateTooltip(TextPosition mouseTextPos)
     {

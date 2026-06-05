@@ -2,6 +2,7 @@ namespace StationeersIC10Editor.IC10;
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -402,7 +403,13 @@ public class IC10Utils
         {
             var line = sline as IC10Line;
             lineMap[iOld] = iNew;
-            if (line.IsLabel)
+
+            if (line.Text.EndsWith("# KEEP"))
+            {
+                minified.Add(line);
+                iNew++;
+            }
+            else if (line.IsLabel)
             {
                 string labelName = line[0].Text.TrimEnd(':');
                 defines[labelName] = iNew.ToString();
@@ -432,25 +439,23 @@ public class IC10Utils
         var newCode = new StringBuilder();
         foreach (var line in minified)
         {
-            if (line.IsJump)
-            {
-                int argIndex = line.NumCodeTokens - 1;
-                var t = line[argIndex];
-                string labelName = t.Text;
-                if (defines.TryGetValue(labelName, out string value))
-                    t.Text = value;
-            }
-            else if (line.IsAlias && defines.TryGetValue(line[1].Text, out string aliasValue) && aliasValue != null)
+            if (line.IsAlias && defines.TryGetValue(line[1].Text, out string aliasValue) && aliasValue != null)
                 continue;
 
             string lineStr = "";
             foreach (var t in line)
             {
                 string text = t.Text;
-                if (defines.TryGetValue(t.Text, out string value) && value != null)
+                string suffix = "";
+                if (text.Contains(":"))
+                {
+                    suffix = text.Substring(text.IndexOf(':'));
+                    text = text.Substring(0, text.IndexOf(':'));
+                }
+                if (defines.TryGetValue(text, out string value) && value != null)
                     text = value;
                 if (!text.TrimStart().StartsWith("#"))
-                    lineStr += text.Trim() + " ";
+                    lineStr += text.Trim() + suffix + " ";
             }
             newCode.AppendLine(lineStr.Trim());
         }
