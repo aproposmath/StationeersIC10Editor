@@ -2,7 +2,7 @@ namespace StationeersIC10Editor.IC10;
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -227,7 +227,8 @@ public class IC10Utils
                 return false;
             }
         }
-        if (Double.TryParse(text, out value))
+
+        if (double.TryParse(text, NumberStyles.Number, NumberFormatInfo.InvariantInfo, out value))
             return true;
         return false;
     }
