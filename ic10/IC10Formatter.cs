@@ -1,9 +1,5 @@
 namespace StationeersIC10Editor.IC10;
 
-// todo: proper tooltips(check column)
-//     update on line called too often(and throws away data if there are no semantic tokens)
-//     -> relevant in tooltips
-
 using System;
 using System.Collections.Generic;
 
@@ -13,16 +9,21 @@ using ImGuiNET;
 
 using UnityEngine;
 
+public class DefinedIdentifier(string value)
+{
+    public int Count = 0;
+    public string Value = value;
+}
+
 public class IC10CodeFormatter : StaticFormatter
 {
     private Dictionary<string, DataType> types = new Dictionary<string, DataType>();
-    private Dictionary<string, int> defines = new Dictionary<string, int>();
-    private Dictionary<string, int> regAliases = new Dictionary<string, int>();
-    private Dictionary<string, int> devAliases = new Dictionary<string, int>();
-    private Dictionary<string, int> labels = new Dictionary<string, int>();
+    private Dictionary<string, DefinedIdentifier> defines = [];
+    private Dictionary<string, DefinedIdentifier> regAliases = [];
+    private Dictionary<string, DefinedIdentifier> devAliases = [];
+    private Dictionary<string, DefinedIdentifier> labels = [];
     private HashSet<string> _tokensToUpdate = new HashSet<string>();
     private bool _showRegisterUsage = false;
-
 
     public Editor _MinifyEditor = null;
     public Editor MinifyEditor
@@ -302,7 +303,55 @@ public class IC10CodeFormatter : StaticFormatter
             // line.Add(t);
         }
 
-        line.UpdateTokenColors(types);
+        UpdateTokens(line);
+    }
+
+    public void SetDefinedValueTooltip(Token token)
+    {
+        var name = token.Text;
+        defines.TryGetValue(name, out var identifier);
+        if (identifier == null) regAliases.TryGetValue(name, out identifier);
+        if (identifier == null) devAliases.TryGetValue(name, out identifier);
+        if (identifier != null)
+        {
+            token.Tooltip =
+            [
+                StyledLine.FromString($"{identifier.Value}", GetColor((DataType)token.Type, name))
+            ];
+        }
+    }
+
+    public void UpdateTokens(StyledLine line, HashSet<string> changedNames = null)
+    {
+        for (int i = 0; i < line.Count; i++)
+        {
+            var t = line[i];
+            string text = t.Text;
+            bool isUnknown = false;
+
+            // Re-resolve type if it was an identifier
+            if (types.TryGetValue(text, out DataType newType))
+            {
+                isUnknown = newType == DataType.Unknown;
+                if (!isUnknown)
+                {
+                    t.Error = null;
+                    t.Type = (uint)newType;
+                    t.Style = new Style(GetColor(newType, text), GetBackgroundColor(newType, text));
+                    SetDefinedValueTooltip(t);
+                }
+            }
+            else if (changedNames != null && changedNames.Contains(text))
+                isUnknown = true;
+
+            if (isUnknown)
+            {
+                t.Error = StyledText.ErrorText("Undefined identifier");
+                t.Type = (uint)DataType.Unknown;
+                t.Style = new Style(GetColor(DataType.Unknown, text), GetBackgroundColor(DataType.Unknown, text));
+                t.Tooltip = null;
+            }
+        }
     }
 
     public bool IsDeviceNetwork(string text)
@@ -400,7 +449,7 @@ public class IC10CodeFormatter : StaticFormatter
             DataType type = DataType.Unknown;
             if (defines.ContainsKey(token))
             {
-                count += defines[token];
+                count += defines[token].Count;
                 type = DataType.Number;
             }
             if (devAliases.ContainsKey(token))
@@ -415,7 +464,7 @@ public class IC10CodeFormatter : StaticFormatter
             }
             if (labels.ContainsKey(TrimToken(token)))
             {
-                count += labels[token];
+                count += labels[token].Count;
                 type = DataType.Label;
             }
             if (IC10Utils.Instructions.ContainsKey(token))
@@ -443,7 +492,7 @@ public class IC10CodeFormatter : StaticFormatter
         }
         else if (needsUpdate)
             foreach (IC10Line line in Lines)
-                line.UpdateTokenColors(types, _tokensToUpdate);
+                UpdateTokens(line, _tokensToUpdate);
 
         _tokensToUpdate.Clear();
     }
@@ -486,24 +535,26 @@ public class IC10CodeFormatter : StaticFormatter
             return;
 
         if (line.IsLabel)
-            UpdateDict(labels, TrimToken(line[0].Text), DataType.Label, add);
+            UpdateDict(labels, TrimToken(line[0].Text), DataType.Label, add, TrimToken(line[0].Text));
         else if (line.IsNumAlias)
-            UpdateDict(regAliases, line[1].Text, DataType.Number, add);
+            UpdateDict(regAliases, line[1].Text, DataType.Number, add, TrimToken(line[2].Text));
         else if (line.IsDevAlias)
-            UpdateDict(devAliases, line[1].Text, DataType.Device, add);
+            UpdateDict(devAliases, line[1].Text, DataType.Device, add, TrimToken(line[2].Text));
         else if (line.IsDefine)
-            UpdateDict(defines, line[1].Text, DataType.Number, add);
+            UpdateDict(defines, line[1].Text, DataType.Number, add, TrimToken(line[2].Text));
     }
 
-    private void UpdateDict(Dictionary<string, int> dict, string key, DataType type, bool add)
+    private void UpdateDict(Dictionary<string, DefinedIdentifier> dict, string key, DataType type, bool add, string value)
     {
         // L.Debug($"UpdateDict: {(add ? "adding" : "removing")} key {key} of type {type}");
         if (add)
         {
             if (!dict.ContainsKey(key))
-                dict[key] = 0;
+                dict[key] = new DefinedIdentifier(value);
+            else
+                dict[key].Value = value;
 
-            dict[key]++;
+            dict[key].Count++;
         }
         else
         {
@@ -513,8 +564,8 @@ public class IC10CodeFormatter : StaticFormatter
                 return;
             }
             L.Debug($"RemoveDictEntry: removing key {key} from dictionary {dict[key]}");
-            dict[key]--;
-            if (dict[key] == 0)
+            dict[key].Count--;
+            if (dict[key].Count == 0)
             {
                 dict.Remove(key);
                 types.Remove(key);

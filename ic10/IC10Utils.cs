@@ -828,37 +828,4 @@ public class IC10Line : StyledLine
     // Since IC10CodeFormatter calls specific logic, we can rely on that.
     // But if we want to update types dynamically (e.g. after alias change):
 
-    public void UpdateTokenColors(Dictionary<string, DataType> types, HashSet<string> changedNames = null)
-    {
-        // We need to re-evaluate token types.
-        // Since SemanticToken is a struct, we iterate by index to modify.
-        for (int i = 0; i < Count; i++)
-        {
-            var t = this[i];
-            string text = t.Text;
-            bool isUnknown = false;
-
-            // Re-resolve type if it was an identifier
-            if (types.TryGetValue(text, out DataType newType))
-            {
-                isUnknown = newType == DataType.Unknown;
-                if (!isUnknown)
-                {
-                    t.Error = null;
-                    t.Type = (uint)newType;
-                    t.Style = new Style(IC10CodeFormatter.GetColor(newType, text),
-                     IC10CodeFormatter.GetBackgroundColor(newType, text));
-                }
-            }
-            else if (changedNames != null && changedNames.Contains(text))
-                isUnknown = true;
-
-            if (isUnknown)
-            {
-                t.Error = StyledText.ErrorText("Undefined identifier");
-                t.Type = (uint)DataType.Unknown;
-                t.Style = new Style(IC10CodeFormatter.GetColor(DataType.Unknown, text), IC10CodeFormatter.GetBackgroundColor(DataType.Unknown, text));
-            }
-        }
-    }
 }
