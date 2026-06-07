@@ -29,6 +29,7 @@ public class IC10EditorPlugin : BaseUnityPlugin
     public static ConfigEntry<bool> RelativeLineNumbers;
     public static ConfigEntry<bool> RestoreSelectedHousing;
     public static ConfigEntry<string> PathSeparator;
+    public static ConfigEntry<bool> Minify;
 
     public static Dictionary<string, ConfigEntry<string>> Colors = new();
     public static IC10EditorPlugin Instance { get; private set; }
@@ -125,6 +126,12 @@ public class IC10EditorPlugin : BaseUnityPlugin
             "RestoreSelectedHousing_new",
             false,
             "Patch the game code to restore the last selected housing on the computer on load/network changes"
+        );
+        Minify = Config.Bind(
+            "General",
+            "Minify",
+            false,
+            "Minify code on export (removes comments, defines, aliases, labels and whitespaces)"
         );
         PathSeparator = Config.Bind(
             "General",

@@ -21,6 +21,7 @@ public static class Settings
     public static bool RelativeLineNumbers => IC10EditorPlugin.RelativeLineNumbers.Value;
     public static bool RestoreSelectedHousing => IC10EditorPlugin.RestoreSelectedHousing.Value;
     public static string PathSeparator => IC10EditorPlugin.PathSeparator.Value;
+    public static bool MinifyEnabled => IC10EditorPlugin.Minify.Value;
 
     public static Vector2 largeButtonSize => Scale * new Vector2(120, 30);
     public static Vector2 buttonSize => Scale * new Vector2(85, 30);

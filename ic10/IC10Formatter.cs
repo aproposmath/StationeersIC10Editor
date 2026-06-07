@@ -682,22 +682,35 @@ public class IC10CodeFormatter : StaticFormatter
     {
         base.DrawStatus(pos);
         DrawRegisterUsage();
+        if (!Settings.MinifyEnabled && Editor.ParentTab.Editors.Count > 1)
+        {
+            Editor.ParentTab.ClearExtraEditors();
+            _MinifyEditor = null;
+            UpdateCodeSize();
+        }
+        if (!Editor.IsReadOnly && Settings.MinifyEnabled && Editor.ParentTab.Editors.Count == 1)
+            Minify();
     }
 
-    private bool IsMinifyActive = false;
+    private bool IsMinifyActive => Settings.MinifyEnabled && _MinifyEditor != null;
 
     public void Minify()
     {
-        if (!IsMinifyActive) return;
+        if (Editor == null || Editor.ParentTab == null || Editor.IsReadOnly) return;
+        if (!Settings.MinifyEnabled) return;
         MinifyEditor.ResetCode(IC10Utils.Minify(Lines));
         CodeSize = MinifyFormatter.CodeSize;
     }
 
+    const string _minifyTooltip = "Show minified version of the code, which will be used on 'Export'.\n\nAppend '# KEEP' to define/alias/labels lines to keep them.";
+
     public override void DrawButtons()
     {
-        if (ImGui.Checkbox("Minify", ref IsMinifyActive))
+        bool minify = Settings.MinifyEnabled;
+        if (ImGuiUtils.Checkbox("Minify", ref minify, _minifyTooltip))
         {
-            if (IsMinifyActive)
+            IC10EditorPlugin.Minify.Value = minify;
+            if (minify)
                 Minify();
             else
             {
@@ -705,15 +718,6 @@ public class IC10CodeFormatter : StaticFormatter
                 _MinifyEditor = null;
             }
             UpdateCodeSize();
-        }
-        if (ImGui.IsItemHovered() && Settings.ShowTooltip)
-        {
-            ImGui.SetNextWindowSize(
-                new Vector2(40 * Settings.CharWidth, 5 * Settings.LineHeightWithSpacing) + 2 * ImGui.GetStyle().WindowPadding
-            );
-            ImGui.BeginTooltip();
-            ImGui.TextWrapped("Show minified version of the code, which will be used on 'Export'.\n\nAppend '# KEEP' to define/alias/labels lines to keep them.");
-            ImGui.EndTooltip();
         }
         ImGui.SameLine();
         ImGuiUtils.Checkbox("Registers", ref _showRegisterUsage, "Show register usage");
@@ -731,7 +735,7 @@ public class IC10CodeFormatter : StaticFormatter
         var height = (18 + 4 * 0.5f) * Settings.LineHeightWithSpacing;
 
         startPos.x = ImGui.GetWindowPos().x + ImGui.GetWindowWidth() - width - ImGui.GetStyle().FramePadding.x - ImGui.GetStyle().ItemSpacing.x * 5;
-        startPos.y -= 1.5f * Settings.buttonSize.y + height;
+        startPos.y -= 2.0f * Settings.buttonSize.y + height;
 
         var colorUsed4 = new Vector4(1.0f, 1.0f, 0.0f, 1.0f);
         var colorFree4 = new Vector4(0.0f, 1.0f, 0.0f, 1.0f);
@@ -784,9 +788,8 @@ public class IC10CodeFormatter : StaticFormatter
 
     public override string Compile()
     {
-        if (IsMinifyActive)
-            return MinifyEditor.CodeFormatter.Compile();
-        else
-            return base.Compile();
+        if (Settings.MinifyEnabled)
+            return IC10Utils.Minify(Lines);
+        return base.Compile();
     }
 }

@@ -168,9 +168,10 @@ public readonly struct Pane : IDisposable
 
 public class ImGuiUtils
 {
-    public static bool Checkbox(string label, ref bool value, string tooltip = null)
+    public static bool Checkbox(string label, ref bool value, string tooltip = null, bool disabled = false)
     {
-        var pressed = ImGui.Checkbox(label, ref value);
+        using var _ = new ScopedStyleColor([ImGuiCol.Text, ImGuiCol.CheckMark, ImGuiCol.FrameBgHovered], ICodeFormatter.ColorFromHTML("gray"), disabled);
+        var pressed = ImGui.Checkbox(label, ref value) && !disabled;
 
         if (!string.IsNullOrEmpty(tooltip) && ImGui.IsItemHovered() && Settings.ShowTooltip)
             ImGui.SetTooltip(tooltip);

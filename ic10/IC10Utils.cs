@@ -466,7 +466,7 @@ public class IC10Utils
             }
             newCode.AppendLine(lineStr.Trim());
         }
-        return newCode.ToString().Trim();
+        return newCode.ToString().Trim().Replace("\r\n", "\n");
     }
 
     public static bool IsHashExpression(string text) =>

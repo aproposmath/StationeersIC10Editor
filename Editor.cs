@@ -155,7 +155,7 @@ public class Editor
     public object Target;
     public ProgrammableChipMotherboard PCM => Target as ProgrammableChipMotherboard;
     public VersionedScript Library => Target as VersionedScript;
-    bool IsMotherboard => PCM != null;
+    public bool IsMotherboard => PCM != null;
     public bool EnforceLineLengthLimit => Settings.EnforceLineLengthLimit && IsMotherboard;
     public bool EnforceLineLimit => Settings.EnforceLineLimit && IsMotherboard;
     public bool EnforceByteLimit => Settings.EnforceByteLimit && IsMotherboard;
@@ -986,7 +986,7 @@ public class Editor
         {
             if (LimitExceeded)
                 return LimitExceededMessage;
-            PCM.InputFinished(Code);
+            PCM.InputFinished(CodeFormatter.Compile());
             return "Saved to Motherboard";
         }
         if (Library != null)
@@ -1379,11 +1379,7 @@ public class EditorWindow
         if (IsMotherboard)
         {
             Confirm();
-            var code = MotherboardTab[0].CodeFormatter.Compile();
-            var pcm = MotherboardTab[0].PCM;
-            pcm.InputFinished(code);
-            pcm.Export();
-            pcm.InputFinished(Code); // restore uncompiled code on motherboard
+            MotherboardTab[0].PCM.Export();
             return;
         }
 
