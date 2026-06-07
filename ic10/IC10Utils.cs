@@ -784,7 +784,7 @@ public class IC10Line : StyledLine
         IsAlias && (GetDataType(2) == DataType.Number || GetDataType(2) == DataType.Register);
     public bool IsDevAlias => IsAlias && GetDataType(2) == DataType.Device;
     public bool IsDefine =>
-        NumCodeTokens == 3 && GetDataType(0) == DataType.Define && GetDataType(2) == DataType.Number;
+        NumCodeTokens == 3 && GetDataType(0) == DataType.Define && (GetDataType(2) & (DataType.Number | DataType.BasicEnum)) != 0;
     public bool IsInstruction => NumCodeTokens > 0 && GetDataType(0) == DataType.Instruction;
     public bool IsJump => IsInstruction && (OpCode.StartsWith("j") || OpCode.StartsWith("b"));
     public bool IsRelativeJump => IsJump && (OpCode == "jr" || OpCode.StartsWith("br"));

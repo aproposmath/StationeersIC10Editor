@@ -154,7 +154,7 @@ public class IC10CodeFormatter : StaticFormatter
     public static uint ColorDevice = ColorFromHTML("#00ff00");
     public static uint ColorLogicType = ColorFromHTML("#ff8000");
     public static uint ColorRegister = ColorFromHTML("#0080ff");
-    public static uint ColorBasicEnum = ColorFromHTML("#20b2aa");
+    public static uint ColorBasicEnum = ColorNumber;
     public static uint ColorDefine = ColorNumber;
     public static uint ColorAlias = ColorFromHTML("#4d4dcc");
     public static uint ColorLabel = ColorFromHTML("#A128C1");
@@ -183,7 +183,6 @@ public class IC10CodeFormatter : StaticFormatter
         var line = TParseLine<IC10Line>(text);
 
         IdentifyTypesAndAddTokens(line);
-        line.UpdateTokenColors(types);
         return line;
     }
 
@@ -540,11 +539,15 @@ public class IC10CodeFormatter : StaticFormatter
             return;
 
         var line = Lines[caret.Line] as IC10Line;
-        var index = line.IndexOf(token);
-        if (index > 0 && !line.IsInstruction)
+
+        if (line.NumCodeTokens == 0)
             return;
 
-        IC10.ArgType argType = DataType.Instruction;
+        var index = line.IndexOf(token);
+        if (index > 0 && !line.IsInstruction && line[0].Text != "define")
+            return;
+
+        ArgType argType = DataType.Instruction;
         if (index == 0)
             argType.Add(DataType.Define, DataType.Alias);
 
