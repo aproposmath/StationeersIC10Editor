@@ -21,6 +21,7 @@ using static Utils;
 
 public class ConfirmWindow
 {
+    public static int NumWindowsOpen = 0;
     public string Title;
     public string Message;
     public bool IsOpen = true;
@@ -38,12 +39,14 @@ public class ConfirmWindow
         InputPrompt = inputPrompt;
         UserInput = "";
         _justOpened = true;
+        NumWindowsOpen++;
     }
 
     public void Close()
     {
         IsOpen = false;
         ImGui.CloseCurrentPopup();
+        NumWindowsOpen--;
     }
 
     public void Confirm()
@@ -51,6 +54,7 @@ public class ConfirmWindow
         OnConfirm?.Invoke();
         IsOpen = false;
         ImGui.CloseCurrentPopup();
+        NumWindowsOpen--;
     }
 
     public void Draw()
@@ -1272,6 +1276,17 @@ public class EditorTab
             Editors.RemoveAt(Editors.Count - 1);
     }
 
+    public void OpenVersionWindow()
+    {
+        if (Script == null)
+            return;
+
+        if (VersionWindow == null)
+            VersionWindow = new FileHistoryWindow(Script);
+
+        VersionWindow.Open();
+    }
+
     public void Draw(float availHeight)
     {
         using var _ = new ScopedFont(ImGui.GetIO().Fonts.Fonts[0]);
@@ -1482,10 +1497,7 @@ public class EditorWindow
         ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 2 * ImGui.GetStyle().ItemSpacing.x);
 
         if (Button("History", buttonSize, "Version History (Ctrl+H)", !HasFileVCS))
-        {
-            ActiveTab.VersionWindow = new FileHistoryWindow(ActiveTab.Script);
-            ActiveTab.VersionWindow.Open();
-        }
+            ActiveTab.OpenVersionWindow();
 
         ImGui.SameLine();
 
@@ -1656,7 +1668,7 @@ public class EditorWindow
     private bool _hasFocus = false;
 
     // public bool HasFocus => _hasFocus && !LibrariesWindow.IsOpen && !(ActiveEditor._confirmWindow?.IsOpen ?? false) && !(ActiveTab.VersionWindow?.IsOpen ?? false);
-    public bool HasFocus => _hasFocus && !(ActiveEditor._confirmWindow?.IsOpen ?? false);
+    public bool HasFocus => _hasFocus && ConfirmWindow.NumWindowsOpen == 0;
 
     public void Draw()
     {

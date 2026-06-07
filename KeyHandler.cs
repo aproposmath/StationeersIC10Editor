@@ -687,7 +687,7 @@ public class KeyHandler
                 if (Input.GetKeyDown(KeyCode.Space))
                     Window.NextTab();
                 if (Input.GetKeyDown(KeyCode.H) && !Window.IsMotherboard)
-                    Window.ActiveTab.VersionWindow.Open();
+                    Window.ActiveTab.OpenVersionWindow();
                 if (Input.GetKeyDown(KeyCode.Q))
                     _isClosing = true;
                 if (Input.GetKeyDown(KeyCode.L))

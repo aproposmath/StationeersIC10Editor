@@ -17,6 +17,8 @@ using Cysharp.Threading.Tasks;
 
 using ImGuiNET;
 
+using UI.ImGuiUi;
+
 using UnityEngine;
 
 using static ImGuiUtils;
@@ -333,21 +335,19 @@ public class FossilVCS
     {
         if (string.IsNullOrEmpty(path))
             path = RepoFilePath;
-        var log = await RunAsync($"timeline -p \"{path}\" --format \"%h\t%d\t%c\"");
+        var log = await RunAsync($"timeline -p \"{path}\" --format \"%h|%d|%c|%t\"");
         L.Debug($"Log result: {log}");
         var lines = log.Replace("\r\n", "\n").Split('\n').Select(l => l.Trim()).Where(l => !string.IsNullOrEmpty(l));
 
         var result = new List<FileVersion>();
         foreach (var line in lines)
         {
-            var parts = line.Split('\t');
+            var parts = line.Split('|');
             L.Debug($"Log line: {line}, parts: {parts.Length}");
             if (parts.Length < 3)
                 continue;
 
             var message = parts[2];
-            for (var i = 3; i < parts.Length; i++)
-                message += "_" + parts[i];
 
             var date = DateTime.Parse(
                 parts[1],
@@ -355,7 +355,9 @@ public class FossilVCS
                 System.Globalization.DateTimeStyles.AssumeUniversal |
                 System.Globalization.DateTimeStyles.AdjustToUniversal).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
 
-            result.Add(new FileVersion { Path = path, Hash = parts[0], Date = date, Message = message });
+            var tags = parts[3].Split(',').Select(t => t.Trim()).Where(t => !string.IsNullOrEmpty(t)).Skip(1).ToList();
+
+            result.Add(new FileVersion { Path = path, Hash = parts[0], Date = date, Message = message, Tags = tags });
         }
         return result;
     }
@@ -404,6 +406,7 @@ public class FileVersion
     public string Hash;
     public string Date;
     public string Message;
+    public List<string> Tags;
     public VersionedScript VersionedScript;
     public InstructionData Library = null;
     public List<DiffLine> DiffLines = null;
@@ -427,7 +430,19 @@ public class FileVersion
             }
     }
 
-    public string Label => string.IsNullOrEmpty(Date) || string.IsNullOrEmpty(Message) ? $"{Date}{Message}" : $"{Date} - {Message}";
+    private string _Label = null;
+    public string Label
+    {
+        get
+        {
+            if (_Label == null)
+            {
+                var tagsLabel = (Tags != null && Tags.Count > 0) ? $"{Tags[0]}, " : "";
+                _Label = string.IsNullOrEmpty(Date) || string.IsNullOrEmpty(Message) ? $"{Date}{Message}" : $"{Date} - {tagsLabel}{Message}";
+            }
+            return _Label;
+        }
+    }
 }
 
 
@@ -446,13 +461,16 @@ public struct DiffLine
 public class FileHistoryWindow
 {
     public bool IsOpen = false;
-    public List<FileVersion> Versions = new List<FileVersion>();
+    public List<FileVersion> AllVersions = [];
+    public List<FileVersion> TaggedVersions = [];
+    public List<FileVersion> Versions => _showTags ? TaggedVersions : AllVersions;
     private Editor _previewEditor;
     private Editor _compareEditor; // hidden, for formatting the previous version
     public FileVersion SelectedVersion = null;
     public VersionedScript Library;
     private DiffViewMode _viewMode = DiffViewMode.Code;
     private bool _diffLoading = false;
+    private bool _showTags = false;
 
     static readonly uint ColorAdded = ICodeFormatter.ColorFromHTML("#1a3a1a");
     static readonly uint ColorRemoved = ICodeFormatter.ColorFromHTML("#3a1a1a");
@@ -471,11 +489,13 @@ public class FileHistoryWindow
     public async UniTaskVoid LoadVersions()
     {
         var newVersions = await FossilVCS.Log(Library.Data.DirectoryPath.Name);
-        var currentVersion = new FileVersion { Hash = "", Path = "", Date = "", Message = "Last saved", Library = Library.Data };
+        TaggedVersions = [.. newVersions.Where(v => v.Tags != null && v.Tags.Count > 0)];
+        var currentVersion = new FileVersion { Hash = "", Path = "", Date = "", Message = "Last saved", Library = Library.Data, Tags = [] };
         newVersions.Insert(0, currentVersion);
+        TaggedVersions.Insert(0, currentVersion);
         foreach (var v in newVersions)
             v.VersionedScript = Library;
-        Versions = newVersions;
+        AllVersions = newVersions;
     }
 
     public void Close()
@@ -601,6 +621,30 @@ public class FileHistoryWindow
         ImGui.EndChild();
     }
 
+    public void SetShowTags(bool showTags)
+    {
+        if (_showTags != showTags)
+            foreach (var version in Versions)
+                version.DiffLines = null; // reset diffs to force reload when switching between tags/commits
+        _showTags = showTags;
+        var index = Versions.IndexOf(SelectedVersion);
+        SelectedVersion = null;
+        SelectVersion(index == -1 ? Versions.FirstOrDefault() : Versions[index]);
+    }
+
+    void SelectVersion(FileVersion version)
+    {
+        if (SelectedVersion != version)
+        {
+            SelectedVersion = version;
+            EnsureEditors();
+            _previewEditor.ResetCode("# Loading version...", false);
+            LoadVersionCode(version).Forget();
+        }
+    }
+
+    public static readonly uint ColorNumber = ICodeFormatter.ColorFromHTML("#40e2ba");
+
     public void Draw()
     {
         if (!IsOpen)
@@ -612,15 +656,16 @@ public class FileHistoryWindow
         ImGui.Begin($"Version History: {title}", ref IsOpen, ImGuiWindowFlags.NoSavedSettings);
         using (new Pane("Versions", 0.4f, -1))
         {
+            if (ImGui.RadioButton("Commits", _showTags == false)) SetShowTags(false);
+            ImGui.SameLine();
+            if (ImGui.RadioButton("Tags", _showTags == true)) SetShowTags(true);
+
+            ImGui.Separator();
             foreach (var version in Versions)
             {
+                using var style = new ScopedStyleColor(ImGuiCol.Text, ICodeFormatter.ColorNumber, version.Tags.Count > 0);
                 if (ImGui.Selectable(version.Label, SelectedVersion == version) && SelectedVersion != version)
-                {
-                    SelectedVersion = version;
-                    EnsureEditors();
-                    _previewEditor.ResetCode("# Loading version...", false);
-                    LoadVersionCode(version).Forget();
-                }
+                    SelectVersion(version);
             }
         }
 
@@ -635,6 +680,19 @@ public class FileHistoryWindow
                 if (ImGui.RadioButton("Inline Diff", _viewMode == DiffViewMode.InlineDiff)) _viewMode = DiffViewMode.InlineDiff;
                 ImGui.SameLine();
                 if (ImGui.RadioButton("Diff Only", _viewMode == DiffViewMode.DiffOnly)) _viewMode = DiffViewMode.DiffOnly;
+                ImGui.SameLine();
+
+                var pos = ImGui.GetCursorScreenPos();
+                pos.x += ImGui.GetContentRegionAvail().x - 2 * Settings.buttonSize.x - ImGui.GetStyle().FramePadding.x - ImGui.GetStyle().ItemSpacing.x;
+                ImGui.SetCursorScreenPos(pos);
+                bool isSavedVersion = SelectedVersion == null || string.IsNullOrEmpty(SelectedVersion.Hash);
+                if (Button("Rename", Settings.buttonSize, "Change the commit message of this version", isSavedVersion))
+                    ShowChangeCommitMessageWindow();
+                ImGui.SameLine();
+                if (Button("Tag", Settings.buttonSize, "Create a tag for this version", isSavedVersion))
+                    ShowSetTagWindow();
+
+                ImGui.Separator();
 
                 if (_viewMode == DiffViewMode.Code)
                 {
@@ -675,11 +733,16 @@ public class FileHistoryWindow
             Close();
 
         ImGui.End();
+
+        _commitMessageWindow?.Draw();
     }
 
     public static List<DiffLine> ParseDiff(string json, int oldOffset, int newOffset,
         List<StyledLine> oldLines, List<StyledLine> newLines)
     {
+        L.Debug($"Parsing diff json: {json}");
+        if (string.IsNullOrEmpty(json))
+            return [];
         var root = Newtonsoft.Json.Linq.JArray.Parse(json);
         if (root[0]["diff"] is not Newtonsoft.Json.Linq.JArray diffArray)
             return [];
@@ -719,13 +782,67 @@ public class FileHistoryWindow
                     AddLine(DiffTag.Equal, oldLine++, newLine++);
             if (op == 2) AddLine(DiffTag.Equal, oldLine++, newLine++);
             if (op == 3) AddLine(DiffTag.Added, null, newLine++);
-            if (op == 5 && GetOld(oldLine).Text != GetNew(newLine).Text)
+            if (op == 4) AddLine(DiffTag.Removed, oldLine++);
+            if (op == 5)
             {
-                AddLine(DiffTag.Removed, oldLine++);
-                AddLine(DiffTag.Added, null, newLine++);
+                if (GetOld(oldLine).Text != GetNew(newLine).Text)
+                {
+                    AddLine(DiffTag.Removed, oldLine);
+                    AddLine(DiffTag.Added, null, newLine);
+                }
+                oldLine++;
+                newLine++;
             }
             i++;
         }
+
+        while (oldLine < oldCodeCount)
+            AddLine(DiffTag.Removed, oldLine++);
+        while (newLine < newCodeCount)
+            AddLine(DiffTag.Added, null, newLine++);
+
         return [.. result.Where(d => (d.OldLineNum == null || d.OldLineNum >= 0) && (d.NewLineNum == null || d.NewLineNum >= 0))];
+    }
+
+    private ConfirmWindow _commitMessageWindow = null;
+    private void ShowChangeCommitMessageWindow()
+    {
+        var hash = SelectedVersion.Hash;
+        var oldName = SelectedVersion.Message;
+        _commitMessageWindow = new ConfirmWindow($"Rename version '{oldName}'", null, "Message");
+        _commitMessageWindow.OnConfirm = () =>
+        {
+            var input = _commitMessageWindow.UserInput;
+            if (!string.IsNullOrEmpty(input))
+            {
+                FossilVCS.RunAsync($"amend {hash} -m \"{input}\"").Forget();
+                LoadVersions().Forget();
+                _commitMessageWindow = null;
+            }
+        };
+    }
+
+    private async UniTaskVoid SetTag(string tag)
+    {
+        var hash = SelectedVersion.Hash;
+        foreach (var t in SelectedVersion.Tags)
+            await FossilVCS.RunAsync($"tag cancel \"{t}\" {hash}");
+
+        if (!string.IsNullOrEmpty(tag))
+            await FossilVCS.RunAsync($"tag add \"{tag}\" {hash}");
+        LoadVersions().Forget();
+    }
+
+    private void ShowSetTagWindow()
+    {
+        var hash = SelectedVersion.Hash;
+        var oldName = SelectedVersion.Message;
+        _commitMessageWindow = new ConfirmWindow($"Set tag for version '{oldName}'", null, "Tag");
+        _commitMessageWindow.OnConfirm = () =>
+        {
+            var input = _commitMessageWindow.UserInput;
+            SetTag(input).Forget();
+            _commitMessageWindow = null;
+        };
     }
 }
