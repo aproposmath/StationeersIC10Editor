@@ -48,7 +48,7 @@ public class IC10CodeFormatter : StaticFormatter
     public static double MatchingScore(string input)
     {
         // Simple heuristic: count occurrences of IC10-specific keywords
-        int score = 0;
+        double score = 0;
         var lines = input.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
 
         foreach (var line in lines)
@@ -56,6 +56,8 @@ public class IC10CodeFormatter : StaticFormatter
             var firstWord = line.TrimStart().Split(' ')[0];
             if (firstWord.EndsWith(":") || IC10Utils.Instructions.ContainsKey(firstWord))
                 score++;
+            else if (firstWord.StartsWith("#"))
+                score += 0.5f;
         }
         L.Debug($"IC10CodeFormatter MatchingScore: {score} for input with {lines.Length} lines = {(double)score / lines.Length}");
         return 1.0 * score / lines.Length;
