@@ -55,6 +55,26 @@
         "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/v0.9.4/IC10Editor-v0.9.4.zip",
         "version": "0.9.4"
     },
+    "sha256:3356c25fd8fb7e06329a886881e8710d383290e21949432edef21a278e9c9419": {
+        "author": "aproposmath",
+        "branch": [
+            "main"
+        ],
+        "depends_on": [],
+        "digest": "sha256:3356c25fd8fb7e06329a886881e8710d383290e21949432edef21a278e9c9419",
+        "id": "com.github.aproposmath.StationeersIC10Editor",
+        "name": "IC10 Editor",
+        "tag": [
+            "IC10",
+            "Editor",
+            "Code",
+            "BepInEx",
+            "VIM",
+            "StationeersLaunchPad"
+        ],
+        "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/main/IC10Editor-main.zip",
+        "version": "0.9.9.12-dev"
+    },
     "sha256:349bec1a1d79819af70366f8905868f8d53ce7c17db7ccaf8a6dd1d4b3e2eda4": {
         "author": "aproposmath",
         "branch": [],
@@ -108,26 +128,6 @@
         ],
         "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/v0.8.9/IC10Editor-v0.8.9.zip",
         "version": "0.8.9"
-    },
-    "sha256:418cd68371febe4a3d55101e2d45e9c14fcf8a8880bd2577f4e45d56a7d790a1": {
-        "author": "aproposmath",
-        "branch": [
-            "main"
-        ],
-        "depends_on": [],
-        "digest": "sha256:418cd68371febe4a3d55101e2d45e9c14fcf8a8880bd2577f4e45d56a7d790a1",
-        "id": "com.github.aproposmath.StationeersIC10Editor",
-        "name": "IC10 Editor",
-        "tag": [
-            "IC10",
-            "Editor",
-            "Code",
-            "BepInEx",
-            "VIM",
-            "StationeersLaunchPad"
-        ],
-        "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/main/IC10Editor-main.zip",
-        "version": "0.9.9.7-dev"
     },
     "sha256:4ccde4cd2a96d276952e19c59121f69dea8b90c9d67d13c4310faedef8afedf4": {
         "author": "aproposmath",
