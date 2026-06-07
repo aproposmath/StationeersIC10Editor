@@ -265,7 +265,7 @@ public class FossilVCS
             message = $"Update {paths}";
         message = message.Replace("\"", "'");
         await RunAsync($"add {arg}");
-        await RunAsync($"commit --no-warnings -m \"{message}\"");
+        await RunAsync($"commit --no-warnings -m \"{message}\" {arg}");
         await LibraryWindow.LoadScripts();
     }
 
