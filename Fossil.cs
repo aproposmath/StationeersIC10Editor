@@ -349,7 +349,13 @@ public class FossilVCS
             for (var i = 3; i < parts.Length; i++)
                 message += "_" + parts[i];
 
-            result.Add(new FileVersion { Path = path, Hash = parts[0], Date = parts[1], Message = message });
+            var date = DateTime.Parse(
+                parts[1],
+                null,
+                System.Globalization.DateTimeStyles.AssumeUniversal |
+                System.Globalization.DateTimeStyles.AdjustToUniversal).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+
+            result.Add(new FileVersion { Path = path, Hash = parts[0], Date = date, Message = message });
         }
         return result;
     }
