@@ -23,9 +23,11 @@ using static Settings;
 public class VersionedScript(InstructionData data)
 {
     public string Path => Data.DirectoryPath.FullName;
-    public string Title => Data.Title.Split(PathSeparator[0]).Last();
+    public string Title => _title ?? UpdateTitle();
     public InstructionData Data = data;
     public FileState State = FileState.Unknown;
+    public string Tooltip => _tooltip ?? UpdateTooltip();
+
     static readonly Dictionary<FileState, uint> Colors = new()
     {
         { FileState.Unknown, ICodeFormatter.ColorFromHTML("gray") },
@@ -68,6 +70,7 @@ public class VersionedScript(InstructionData data)
         var oldState = State;
         State = await FossilVCS.GetFileState(Data.DirectoryPath.Name + "/instruction.xml");
         L.Debug($"File state for library {Data.DirectoryPath.FullName}: {oldState} -> {State}");
+        UpdateTooltip();
     }
 
     public void Save()
@@ -93,33 +96,40 @@ public class VersionedScript(InstructionData data)
         }
     }
 
-    public string Tooltip
+    public string UpdateTitle()
     {
-        get
-        {
-            var sb = new StringBuilder();
-            sb.AppendLine($"Name:           {LibNode.GetName(Data.Title)}");
-            sb.AppendLine($"Author:         {Data.Author}");
-            sb.AppendLine($"Filename:       {Data.DirectoryPath.Name}/instruction.xml");
-            sb.AppendLine($"Last Modified:  {Date}");
-            sb.AppendLine($"Version Status: {State}");
-            sb.AppendLine($"Workshop ID:    {Data.WorkshopFileHandle}");
-            sb.AppendLine($"Description:    {Data.Description}");
-            sb.AppendLine($"\nRight click for more options");
-            if (State == FileState.Untracked)
-            {
-                sb.AppendLine("");
-                sb.AppendLine("This script is not tracked by version control yet!");
-                sb.AppendLine("Consider clicking 'Commit All' at the top right to make a snapshot of all scripts.");
-            }
-            if (State == FileState.Modified)
-            {
-                sb.AppendLine("");
-                sb.AppendLine("This script has changed since the last version");
-            }
-            return sb.ToString().Replace("%", "%%");
-        }
+        _title = Data.Title.Split(PathSeparator[0]).Last();
+        return _title;
     }
+
+    public string UpdateTooltip()
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"Name:           {LibNode.GetName(Data.Title)}");
+        sb.AppendLine($"Author:         {Data.Author}");
+        sb.AppendLine($"Filename:       {Data.DirectoryPath.Name}/instruction.xml");
+        sb.AppendLine($"Last Modified:  {Date}");
+        sb.AppendLine($"Version Status: {State}");
+        sb.AppendLine($"Workshop ID:    {Data.WorkshopFileHandle}");
+        sb.AppendLine($"Description:    {Data.Description}");
+        sb.AppendLine($"\nRight click for more options");
+        if (State == FileState.Untracked)
+        {
+            sb.AppendLine("");
+            sb.AppendLine("This script is not tracked by version control yet!");
+            sb.AppendLine("Consider clicking 'Commit All' at the top right to make a snapshot of all scripts.");
+        }
+        if (State == FileState.Modified)
+        {
+            sb.AppendLine("");
+            sb.AppendLine("This script has changed since the last version");
+        }
+        _tooltip = sb.ToString().Replace("%", "%%");
+        return _tooltip;
+    }
+
+    private string _tooltip = null;
+    private string _title = null;
 }
 
 
@@ -277,25 +287,26 @@ public class LibNode
             return;
         var flags = ImGuiTreeNodeFlags.SpanAvailWidth;
         var isSelected = IsScript && LibraryWindow.SelectedNode == this;
-        var imguiId = IsScript ? Script.Path : FullName;
-        var imguiLabel = $"{Name}##{imguiId}";
-
         flags |= isSelected ? ImGuiTreeNodeFlags.Selected : 0;
         flags |= (IsFolder && treeView) ? 0 : ImGuiTreeNodeFlags.Leaf;
         if (FullName == "")
             flags |= ImGuiTreeNodeFlags.DefaultOpen;
 
         if (!treeView && IsScript)
-            ImGui.Selectable("  " + FullName.Replace("|", "/"), isSelected);
+            ImGui.Selectable(_path, isSelected);
 
-        var isOpen = treeView && ImGui.TreeNodeEx(imguiLabel, flags);
+        var isOpen = treeView && ImGui.TreeNodeEx(_imguiLabel, flags);
 
         if (ImGui.BeginPopupContextItem())
         {
             var prefix = IsScript ? Prefix : FullName;
             LibraryWindow.SelectLibrary(this);
-            var type = IsScript ? "Script" : "Folder";
-            ImGui.Text($"Edit {type} '{Name}'");
+            if (_editText == null)
+            {
+                var type = IsScript ? "Script" : "Folder";
+                _editText = $"Edit {type} '{Name}'";
+            }
+            ImGui.Text(_editText);
             ImGui.Separator();
             if (ImGui.Selectable("Rename"))
                 LibraryWindow.Rename(this);
@@ -348,7 +359,8 @@ public class LibNode
         if (IsFolder && treeView)
         {
             ImGui.SameLine();
-            ImGui.Text($"({Count})");
+            _countString ??= $"({Count})";
+            ImGui.Text(_countString);
         }
 
         if (IsScript)
@@ -406,11 +418,22 @@ public class LibNode
 
     public int UpdateCount()
     {
+        _path = "  " + FullName.Replace("|", "/");
+        var imguiId = IsScript ? Script.Path : FullName;
+        _imguiLabel = $"{Name}##{imguiId}";
+        _editText = null;
+        _countString = null;
+
         Count = IsScript ? 1 : 0;
         foreach (var child in Children)
             Count += child.UpdateCount();
         return Count;
     }
+
+    private string _countString = null;
+    private string _editText = null;
+    private string _imguiLabel = null;
+    private string _path = null;
 }
 
 public static class LibraryWindow
@@ -762,6 +785,11 @@ public static class LibraryWindow
     }
     public static void SelectLibrary(LibNode node)
     {
+        if (SelectedNode == node)
+            return;
+        _selectedScriptMetadata = null;
+        _selectedScriptName = null;
+        _selectedScriptDescriptionLines = -1;
         if (node.IsFolder)
             return;
         SelectedNode = node;
@@ -1073,9 +1101,11 @@ public static class LibraryWindow
         }
     }
 
+    private static string _selectedScriptMetadata = null;
+    private static string _selectedScriptName = null;
+    private static int _selectedScriptDescriptionLines = -1;
     public static void DrawSelectedLibrary()
     {
-
         using var pane = new Pane("LibrarySearchPreview");
 
         if (SelectedNode != null)
@@ -1084,11 +1114,7 @@ public static class LibraryWindow
             var script = SelectedNode.Script;
             var spacing = ImGui.GetStyle().ItemSpacing;
             var buttonPos = ImGui.GetCursorPos() + new Vector2(width - 3 * buttonSize.x - 2 * ImGui.GetStyle().ItemSpacing.x, 0);
-            var status = script.StatusString;
             var isWorkshop = script.State == FileState.Workshop;
-
-            if (!isWorkshop && script.Data.WorkshopFileHandle != 0)
-                status += ", Published";
 
             var pos = ImGui.GetCursorPos();
 
@@ -1102,7 +1128,6 @@ public static class LibraryWindow
             ImGui.SameLine();
             if (Button("Load", buttonSize, "Load script into Motherboard"))
                 LoadScript(script, null, true);
-
 
             ImGui.SetCursorPos(buttonPos + new Vector2(0, buttonSize.y + 2 * spacing.y));
             if (Button("Save", buttonSize, "Save description and title", isWorkshop))
@@ -1118,25 +1143,36 @@ public static class LibraryWindow
 
             ImGui.SetCursorPos(pos);
 
-            Text($"Author: {script.Data.Author}");
-            Text($"Date:   {script.Date}");
-            Text($"Status: {status}");
-            Text($"Name: ", width / 2);
+            if (_selectedScriptMetadata == null)
+            {
+                var status = script.StatusString;
+                if (!isWorkshop && script.Data.WorkshopFileHandle != 0)
+                    status += ", Published";
+
+                _selectedScriptMetadata = $"Author: {script.Data.Author}\nDate:   {script.Date}\nStatus: {status}";
+            }
+
+            Text(_selectedScriptMetadata);
+            Text($"Name:  ", width / 2);
             ImGui.SameLine();
 
             if (isWorkshop)
                 ImGui.Text(script.Title);
             else
             {
-                var name = LibNode.GetName(script.Data.Title);
-                if (InputText("##name", ref name, width / 2))
+                _selectedScriptName ??= LibNode.GetName(script.Data.Title);
+                if (InputText("##name", ref _selectedScriptName, width / 2))
                 {
-                    SelectedNode.Rename(LibNode.Combine(SelectedNode.Prefix, name));
+                    SelectedNode.Rename(LibNode.Combine(SelectedNode.Prefix, _selectedScriptName));
+                    _selectedScriptMetadata = null;
+                    _selectedScriptName = null;
+                    _selectedScriptDescriptionLines = -1;
                 }
             }
 
-            var numLines = Mathf.Clamp(script.Data.Description.Split('\n').Length, 2, 5);
-            var height = (numLines - 1) * LineHeightWithSpacing + LineHeight;
+            if (_selectedScriptDescriptionLines == -1)
+                _selectedScriptDescriptionLines = Mathf.Clamp(script.Data.Description.Split('\n').Length, 2, 5);
+            var height = (_selectedScriptDescriptionLines - 1) * LineHeightWithSpacing + LineHeight;
             ImGui.InputTextMultiline("", ref script.Data.Description, 1024, new Vector2(width, height), isWorkshop ? ImGuiInputTextFlags.ReadOnly : ImGuiInputTextFlags.None);
 
 

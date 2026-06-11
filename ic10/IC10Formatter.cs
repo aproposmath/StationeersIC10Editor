@@ -689,8 +689,10 @@ public class IC10CodeFormatter : StaticFormatter
         }
     }
 
-    private int[] _registerUsage = new int[18];
-    private int[] _registerUsageAlias = new int[18];
+    private readonly int[] _registerUsage = new int[18];
+    private readonly int[] _registerUsageAlias = new int[18];
+    private readonly string[] _registerUsageStr = new string[18];
+    private readonly string[] _registerUsageAliasStr = new string[18];
 
     private void UpdateRegisterUsage()
     {
@@ -727,6 +729,12 @@ public class IC10CodeFormatter : StaticFormatter
                         else L.Warning($"Register number out of range: {reg}");
                     }
                 }
+
+        for (int i = 0; i < 18; i++)
+        {
+            _registerUsageStr[i] = _registerUsage[i] > 0 ? $"{_registerUsage[i]}" : ".";
+            _registerUsageAliasStr[i] = _registerUsageAlias[i] > 0 ? $"{_registerUsageAlias[i]}" : ".";
+        }
     }
 
     public override void DrawStatus(Vector2 pos)
@@ -774,6 +782,12 @@ public class IC10CodeFormatter : StaticFormatter
         ImGuiUtils.Checkbox("Registers", ref _showRegisterUsage, "Show register usage");
     }
 
+    public static string[] _registerNames = new string[]
+    {
+        "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7",
+        "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15",
+        "sp", "ra"
+    };
 
     public void DrawRegisterUsage()
     {
@@ -819,12 +833,9 @@ public class IC10CodeFormatter : StaticFormatter
             var shift = new Vector2(Settings.CharWidth, 0);
             var strNumUse = numUse > 0 ? $"{numUse}".PadLeft(2) : " .";
             var strNumAlias = numAlias > 0 ? $"{numAlias}".PadLeft(2) : " .";
-            var strReg = $"r{i}";
-            if (i == 16) strReg = "sp";
-            if (i == 17) strReg = "ra";
-            drawList.AddText(startPos, color, strReg);
-            drawList.AddText(startPos + 3 * shift, color, strNumUse);
-            drawList.AddText(startPos + 5 * shift, color, strNumAlias);
+            drawList.AddText(startPos, color, _registerNames[i]);
+            drawList.AddText(startPos + 3 * shift, color, _registerUsageStr[i]);
+            drawList.AddText(startPos + 5 * shift, color, _registerUsageAliasStr[i]);
             startPos.y += Settings.LineHeightWithSpacing * (i % 4 == 3 ? 1.5f : 1);
         }
     }

@@ -160,11 +160,9 @@ public class Editor
     public ProgrammableChipMotherboard PCM => Target as ProgrammableChipMotherboard;
     public VersionedScript Library => Target as VersionedScript;
     public bool IsMotherboard => PCM != null;
-    public bool EnforceLineLengthLimit => Settings.EnforceLineLengthLimit && IsMotherboard;
-    public bool EnforceLineLimit => Settings.EnforceLineLimit && IsMotherboard;
-    public bool EnforceByteLimit => Settings.EnforceByteLimit && IsMotherboard;
 
-    public bool LimitExceeded => (EnforceLineLimit && CodeSize.NumLines > 128) || (EnforceByteLimit && CodeSize.NumBytes > 4096) || (EnforceLineLengthLimit && CodeSize.MaxLineLength > 90);
+    public bool LimitExceeded => IsMotherboard && (EnforceLineLimit && CodeSize.NumLines > 128) || (EnforceByteLimit && CodeSize.NumBytes > 4096) || (EnforceLineLengthLimit && CodeSize.MaxLineLength > 90);
+    public bool ExportLimitExceeded => (Settings.EnforceLineLimit && CodeSize.NumLines > 128) || (Settings.EnforceByteLimit && CodeSize.NumBytes > 4096) || (Settings.EnforceLineLengthLimit && CodeSize.MaxLineLength > 90);
 
     public bool HaveSelection => (bool)Selection;
     public KeyHandler KeyHandler;
@@ -1040,11 +1038,22 @@ public class Editor
 
     public bool HasFocus => KeyHandler?.Editor == this;
 
+    string lastId = null;
+    string _lineNumbersId = null;
+
+    private static List<string> _lineNumbersBuffer = [.. Enumerable.Range(-1000, 10001).Select(lineNumber => lineNumber.ToString().PadLeft(3) + ".")];
+
     public void DrawLineNumbers(Vector2 pos, Vector2 size, string id)
     {
+        if (id != lastId)
+        {
+            lastId = id;
+            _lineNumbersId = id + "_LineNumbers";
+        }
+
         ImGui.SetNextWindowContentSize(size);
         ImGui.SetCursorScreenPos(pos);
-        ImGui.BeginChild(id + "_LineNumbers", size, true, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoSavedSettings);
+        ImGui.BeginChild(_lineNumbersId, size, true, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoSavedSettings);
 
         var yEnd = pos.y + size.y;
 
@@ -1067,12 +1076,11 @@ public class Editor
             drawList.AddText(
                 pos,
                 ICodeFormatter.ColorLineNumber,
-                lineNumber.ToString().PadLeft(3) + "."
+                lineNumber > -1000 && lineNumber < 10000 ? _lineNumbersBuffer[lineNumber + 1000] : lineNumber.ToString() + "."
             );
             lineNumber++;
             pos.y += LineHeight;
         }
-
         ImGui.EndChild();
     }
 
@@ -1287,6 +1295,8 @@ public class EditorTab
         VersionWindow.Open();
     }
 
+    private List<string> _editorIds = new List<string>();
+
     public void Draw(float availHeight)
     {
         using var _ = new ScopedFont(ImGui.GetIO().Fonts.Fonts[0]);
@@ -1298,9 +1308,11 @@ public class EditorTab
         avail.x = avail.x / n - spacing * (n - 1) / n;
         for (var i = 0; i < n; i++)
         {
+            if (_editorIds.Count <= i)
+                _editorIds.Add($"##editorpane{_editorIds.Count}");
             var editor = Editors[i];
             editor.Update();
-            editor.Draw(p0, avail, $"##editorpane{i}");
+            editor.Draw(p0, avail, _editorIds[i]);
             if (i < n - 1)
                 ImGui.SameLine();
             p0.x += avail.x + spacing;
@@ -1347,6 +1359,7 @@ public class EditorWindow
     public TextRange Selection => ActiveEditor.Selection;
 
     bool LimitExceeded => ActiveTab[0].LimitExceeded;
+    bool ExportLimitExceeded => ActiveTab[0].ExportLimitExceeded;
 
     private string Title = "IC10 Editor";
 
@@ -1385,7 +1398,7 @@ public class EditorWindow
 
     public void Export()
     {
-        if (LimitExceeded)
+        if (ExportLimitExceeded)
         {
             ActiveTab[0].CommandStatus = LimitExceededMessage;
             return;
@@ -1569,10 +1582,13 @@ public class EditorWindow
         ImGui.SameLine();
 
         var isPaused = WorldManager.IsGamePaused;
-        var pauseLabel = isPaused ? "Resume" : "Pause";
-        if (Button(pauseLabel, buttonSize, $"{pauseLabel} Game"))
+        var labelIndex = isPaused ? 1 : 0;
+        if (Button(_pauseLabels[labelIndex], buttonSize, _pauseTooltips[labelIndex]))
             InputSourceCode.Instance.PauseGameToggle(!isPaused);
     }
+
+    private static readonly string[] _pauseLabels = ["Pause", "Resume"];
+    private static readonly string[] _pauseTooltips = ["Resume Game", "Pause Game"];
 
     private static uint _colorGood = ICodeFormatter.ColorFromHTML("green");
     private static uint _colorWarning = ICodeFormatter.ColorFromHTML("orange");
@@ -1580,50 +1596,70 @@ public class EditorWindow
     private static uint _colorDefault = ICodeFormatter.ColorFromHTML("white");
 
     public bool IsMotherboard => ActiveTab[0].PCM != null;
-    public bool EnforceLineLimit => IsMotherboard && Settings.EnforceLineLimit;
-    public bool EnforceByteLimit => IsMotherboard && Settings.EnforceByteLimit;
 
     public float FooterHeight => 2 * ImGui.GetTextLineHeightWithSpacing() + 2 * ImGui.GetStyle().FramePadding.y;
+
+    private TextPosition _lastCaretPos = new TextPosition(-1, -1);
+    private string _caretPosString = null;
+    private CodeSize _lastCodeSize = new CodeSize { NumLines = -1, MaxLineLength = -1, NumBytes = -1 };
+    private StyledLine _limitsLine = null;
+    private int _lastEnforce = -1;
 
     public void DrawFooter()
     {
         ImGui.SetCursorPosX(ImGui.GetStyle().FramePadding.x);
 
-        ImGui.Text($"{CaretLine,3}/{CaretCol,2},");
+        if (_caretPosString == null || CaretPos != _lastCaretPos)
+        {
+            _caretPosString = $"{CaretLine,3}/{CaretCol,2},";
+            _lastCaretPos = CaretPos;
+        }
+
+        int enforceFlags = (Settings.EnforceLineLimit ? 1 : 0) + (Settings.EnforceLineLengthLimit ? 2 : 0) + (Settings.EnforceByteLimit ? 4 : 0);
+        if (_lastCodeSize != ActiveTab[0].CodeSize || enforceFlags != _lastEnforce)
+        {
+            _lastEnforce = enforceFlags;
+            _lastCodeSize = ActiveTab[0].CodeSize;
+            _limitsLine = new StyledLine();
+            int charPos = 0;
+            void drawLimit(bool enforce, int n, int limit, string unit)
+            {
+                var color = _colorDefault;
+                var sValue = $"{n,2}";
+                if (enforce)
+                {
+                    sValue += $"/{limit}";
+                    if (n < limit * 0.9f)
+                        color = _colorGood;
+                    else if (n <= limit)
+                        color = _colorWarning;
+                    else
+                        color = _colorBad;
+                }
+                _limitsLine.Add(new Token(charPos, sValue, new Style(color)));
+                charPos += sValue.Length + 1;
+                var unitString = $"{unit}";
+                _limitsLine.Add(new Token(charPos, unitString, new Style(color)));
+                charPos += unitString.Length + 1;
+            }
+
+            var size = ActiveTab[0].CodeSize;
+
+            drawLimit(EnforceLineLimit, size.NumLines, 128, "lines,");
+            drawLimit(EnforceLineLengthLimit, size.MaxLineLength, 90, "chars,");
+            drawLimit(EnforceByteLimit, size.NumBytes, 4096, "bytes");
+        }
+
+        ImGui.Text(_caretPosString);
         ImGui.SameLine();
 
         var pos = ImGui.GetCursorScreenPos();
         var px0 = ImGui.GetCursorPosX();
         var psx0 = pos.x;
-        var code = Code;
 
         var drawList = ImGui.GetWindowDrawList();
-        void drawLimit(bool enforce, int n, int limit, string unit)
-        {
-            var color = _colorDefault;
-            var sValue = $" {n.ToString().PadLeft(2, ' ')}";
-            if (enforce)
-            {
-                sValue += $"/{limit}";
-                if (n < limit * 0.9f)
-                    color = _colorGood;
-                else if (n <= limit)
-                    color = _colorWarning;
-                else
-                    color = _colorBad;
-            }
-            drawList.AddText(pos, color, sValue);
-            pos.x += sValue.Length * CharWidth;
-            drawList.AddText(pos, _colorDefault, $" {unit}");
-            pos.x += (unit.Length + 1) * CharWidth;
-        }
-
-        var size = ActiveTab[0].CodeSize;
-
-        drawLimit(EnforceLineLimit, size.NumLines, 128, "lines,");
-        drawLimit(EnforceLineLengthLimit, size.MaxLineLength, 90, "chars,");
-        drawLimit(EnforceByteLimit, size.NumBytes, 4096, "bytes");
-        pos.x += 4 * CharWidth;
+        _limitsLine.Draw(pos, 0);
+        pos.x += (4 + _limitsLine.Last().Column + _limitsLine.Last().Length) * CharWidth;
 
         ImGui.SetCursorPosX(px0 + pos.x - psx0);
 
@@ -1648,14 +1684,14 @@ public class EditorWindow
 
         ImGui.SameLine();
 
-        if (Button("Export", buttonSize, "Export to IC10 chip and close editor (Ctrl+E)", LimitExceeded))
+        if (Button("Export", buttonSize, "Export to IC10 chip and close editor (Ctrl+E)", ExportLimitExceeded))
             Export();
 
         ImGui.SameLine();
 
         if (IsMotherboard)
         {
-            if (Button("Confirm", buttonSize, "Save to Motherboard and quit editor (Ctrl+S)"))
+            if (Button("Confirm", buttonSize, "Save to Motherboard and quit editor (Ctrl+S)", LimitExceeded))
                 Confirm();
         }
         else if (Button("Save", buttonSize, "Save to Library (Ctrl+S)"))

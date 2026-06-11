@@ -17,6 +17,24 @@ public struct CodeSize
     public int NumLines;
     public int MaxLineLength;
     public int NumBytes;
+
+    public static bool operator ==(CodeSize a, CodeSize b) => a.Equals(b);
+    public static bool operator !=(CodeSize a, CodeSize b) => !a.Equals(b);
+
+    public override bool Equals(object obj)
+    {
+        var other = (CodeSize)obj;
+        if (other == null)
+            return false;
+        return NumLines == other.NumLines &&
+               MaxLineLength == other.MaxLineLength &&
+               NumBytes == other.NumBytes;
+    }
+
+    public override readonly int GetHashCode()
+    {
+        return NumLines.GetHashCode() ^ MaxLineLength.GetHashCode() ^ NumBytes.GetHashCode();
+    }
 }
 
 public abstract class ICodeFormatter

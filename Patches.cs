@@ -71,6 +71,7 @@ public static class IC10EditorPatches
     {
         try
         {
+            using var memUsage = ScopedMemoryTracker.Track();
             Settings.Update();
             foreach (var editor in AllEditors)
                 editor.Draw();
