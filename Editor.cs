@@ -1553,9 +1553,9 @@ public class EditorWindow
                 {
                     var code = ActiveTab[0].Code;
                     ActiveTab[0].CodeFormatter = CodeFormatters.GetFormatter(fmt);
+                    ActiveTab.ClearExtraEditors();
                     ActiveTab[0].CodeFormatter.Editor = ActiveTab[0];
                     ActiveTab[0].CodeFormatter.ResetCode(code);
-                    ActiveTab.ClearExtraEditors();
                 }
                 if (isSelected)
                     ImGui.SetItemDefaultFocus();
