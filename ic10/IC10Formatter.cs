@@ -757,16 +757,18 @@ public class IC10CodeFormatter : StaticFormatter
     {
         if (Editor == null || Editor.ParentTab == null || Editor.IsReadOnly) return;
         if (!Settings.MinifyEnabled) return;
+        if(Editor.IsMotherboard) return;
         MinifyEditor.ResetCode(IC10Utils.Minify(Lines));
         CodeSize = MinifyFormatter.CodeSize;
     }
 
     const string _minifyTooltip = "Show minified version of the code, which will be used on 'Export'.\n\nAppend '# KEEP' to define/alias/labels lines to keep them.";
+    const string _minifyTooltipMotherboard = "Minify is only available for library scripts to avoid losing the unminified code.";
 
     public override void DrawButtons()
     {
         bool minify = Settings.MinifyEnabled;
-        if (ImGuiUtils.Checkbox("Minify", ref minify, _minifyTooltip))
+        if (ImGuiUtils.Checkbox("Minify", ref minify, Editor.IsMotherboard ? _minifyTooltipMotherboard : _minifyTooltip, Editor.IsMotherboard))
         {
             IC10EditorPlugin.Minify.Value = minify;
             if (minify)
