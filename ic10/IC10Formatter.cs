@@ -852,7 +852,7 @@ public class IC10CodeFormatter : StaticFormatter
 
     public override string Compile()
     {
-        if (Settings.MinifyEnabled)
+        if (IsMinifyActive)
             return IC10Utils.Minify(Lines);
         return base.Compile();
     }
