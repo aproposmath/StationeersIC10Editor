@@ -321,7 +321,7 @@ public class IC10CodeFormatter : StaticFormatter
         }
     }
 
-    public void UpdateTokens(StyledLine line, HashSet<string> changedNames = null)
+    public void UpdateTokens(IC10Line line, HashSet<string> changedNames = null)
     {
         for (int i = 0; i < line.Count; i++)
         {
@@ -350,6 +350,16 @@ public class IC10CodeFormatter : StaticFormatter
                 t.Type = (uint)DataType.Unknown;
                 t.Style = new Style(GetColor(DataType.Unknown, text), GetBackgroundColor(DataType.Unknown, text));
                 t.Tooltip = null;
+            }
+        }
+
+        if (line.IsRelativeJump)
+        {
+            var targetToken = line[line.NumCodeTokens - 1];
+            var jumpInstruction = line[0].Text.Remove(1, 1);
+            if (targetToken.Type == (uint)DataType.Label)
+            {
+                targetToken.Error = StyledText.ErrorText($"Label used as jump offset for relative jump instruction. Use {jumpInstruction} instead.");
             }
         }
     }
@@ -757,7 +767,7 @@ public class IC10CodeFormatter : StaticFormatter
     {
         if (Editor == null || Editor.ParentTab == null || Editor.IsReadOnly) return;
         if (!Settings.MinifyEnabled) return;
-        if(Editor.IsMotherboard) return;
+        if (Editor.IsMotherboard) return;
         MinifyEditor.ResetCode(IC10Utils.Minify(Lines));
         CodeSize = MinifyFormatter.CodeSize;
     }
