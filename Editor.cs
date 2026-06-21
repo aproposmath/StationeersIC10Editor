@@ -557,22 +557,23 @@ public class Editor
     public TextPosition FindString(
         TextPosition startPos,
         string searchTerm,
-        bool forward = true
+        bool forward = true,
+        bool findNext = true
     )
     {
         if (forward)
-            return FindStringForward(startPos, searchTerm);
+            return FindStringForward(startPos, searchTerm, findNext);
         else
-            return FindStringBackward(startPos, searchTerm);
+            return FindStringBackward(startPos, searchTerm, findNext);
     }
 
-    public TextPosition FindStringForward(TextPosition startPos, string searchTerm)
+    public TextPosition FindStringForward(TextPosition startPos, string searchTerm, bool findNext)
     {
         int lineIndex = startPos.Line;
         if (lineIndex < 0 || lineIndex >= Lines.Count)
             return new TextPosition(-1, -1);
 
-        int colIndex = startPos.Col + 1;
+        int colIndex = Math.Min(startPos.Col + (findNext ? 1 : 0), Lines[lineIndex].Length);
 
         while (lineIndex < Lines.Count)
         {
@@ -588,10 +589,10 @@ public class Editor
         return new TextPosition(-1, -1);
     }
 
-    private TextPosition FindStringBackward(TextPosition startPos, string searchTerm)
+    private TextPosition FindStringBackward(TextPosition startPos, string searchTerm, bool findNext)
     {
         int lineIndex = startPos.Line;
-        int colIndex = startPos.Col - 1;
+        int colIndex = startPos.Col - (findNext ? 1 : 0);
 
         while (lineIndex >= 0)
         {
@@ -1327,6 +1328,7 @@ public class EditorWindow
     public KeyMode KeyMode;
     public static bool UseNativeEditor = false;
     KeyHandler KeyHandler;
+    public SearchWindow SearchWindow;
 
     public List<EditorTab> Tabs = new List<EditorTab>();
 
@@ -1365,6 +1367,7 @@ public class EditorWindow
 
     public EditorWindow(ProgrammableChipMotherboard pcm)
     {
+        SearchWindow = null;
         KeyHandler = new KeyHandler(this) { Mode = VimEnabled ? KeyMode.VimNormal : KeyMode.Insert };
         Tabs.Add(new EditorTab(this, new Editor(KeyHandler, pcm), null));
     }
@@ -1453,6 +1456,12 @@ public class EditorWindow
         InputSourceCode.Instance.RectTransform.localPosition = new Vector3(-10000, -10000, 0);
     }
 
+    public void OpenSearchWindow()
+    {
+        SearchWindow ??= new SearchWindow(this);
+        SearchWindow.Open();
+    }
+
     public bool IsInitialized = false;
 
     public void SetTitle(string title)
@@ -1528,6 +1537,10 @@ public class EditorWindow
             ImGui.SameLine();
             ImGui.SetWindowFontScale(1.0f);
         }
+
+        if (Button("Search", buttonSize, "Search and Replace (Ctrl+F)"))
+            OpenSearchWindow();
+        ImGui.SameLine();
 
         float comboWidth = 130;
 
@@ -1800,6 +1813,7 @@ public class EditorWindow
 
         HelpWindow.Draw();
         DebugWindow.Draw();
+        SearchWindow?.Draw();
     }
 
     public void CloseTab(int index = -1)

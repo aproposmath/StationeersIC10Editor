@@ -684,6 +684,8 @@ public class KeyHandler
             {
                 if (Input.GetKeyDown(KeyCode.E))
                     Window.Export();
+                if (Input.GetKeyDown(KeyCode.F))
+                    Window.OpenSearchWindow();
                 if (Input.GetKeyDown(KeyCode.Space))
                     Window.NextTab();
                 if (Input.GetKeyDown(KeyCode.H) && !Window.IsMotherboard)
