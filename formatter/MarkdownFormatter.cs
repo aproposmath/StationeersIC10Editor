@@ -54,7 +54,7 @@ public class SimpleMarkdownFormatter : StaticFormatter
         while (i < line.Length && char.IsDigit(line[i]))
             i++;
 
-        // must have at least one digit and then a ". "
+        // must have at least one digit and then ". "
         return i > 0 &&
                i < line.Length - 1 &&
                line[i] == '.' &&
@@ -74,9 +74,9 @@ public class SimpleMarkdownFormatter : StaticFormatter
             var trimmed = line.TrimStart();
 
             // Headers
-            if (trimmed.StartsWith("#"))
+            if (trimmed.StartsWith("##"))
             {
-                score += 2;
+                score += 1;
                 continue;
             }
 
@@ -84,14 +84,14 @@ public class SimpleMarkdownFormatter : StaticFormatter
             if (trimmed.StartsWith("- [x]") || trimmed.StartsWith("* [x]") ||
                 trimmed.StartsWith("- [ ]") || trimmed.StartsWith("* [ ]"))
             {
-                score += 2;
+                score += 1;
                 continue;
             }
 
             // Bullet / unordered lists
             if (trimmed.StartsWith("- ") || trimmed.StartsWith("* ") || trimmed.StartsWith("+ "))
             {
-                score += 1;
+                score += 0.7;
                 continue;
             }
 
