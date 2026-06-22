@@ -4,7 +4,7 @@
   <Author>aproposmath</Author>
   <ModID>com.github.aproposmath.StationeersIC10Editor</ModID>
   <WorkshopHandle>3592775931</WorkshopHandle>
-  <Version>0.9.8</Version>
+  <Version>0.9.99</Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
 
@@ -34,12 +34,26 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        0.9.8:
-
-        - Horizontal scroll
-        - Diff view in file history window
-        - Help window overhaul
-        - Fix Exception in file history window (thx @Electorlyte)
+        0.9.99:
+        
+        Features:
+        - Search/replace window (Ctrl+F)
+        - Tags for version control, fix bug in diff view
+        - Minify only works for library scripts now, minified code is shown side-by-side with original code in editor
+        - Append '# KEEP' to a line to keep them when minifying (also keeps defines/aliases)
+        - Error message when using a label as relative jump target
+        - Show tooltip with value for alias/defined names
+        - Add Commit button to library window (thx @VFox32)
+        
+        Fixes:
+        - Fix language detection (would detect Markdown instead of IC10 sometimes, thx @VFox32)
+        - Get rid of (allmost?) all memory allocations during rendering (thx @Rocket for pointing out how bad this is :) )
+        - Fix inconsistent timezeone in Version History and Library Window (thx @Electrolyte)
+        - Fix commiting all changes (thx @Electrolyte)
+        - Fix handling BasicEnum values in define (thx @Electrolyte)
+        - Don't allow scientific notation for numbers (to be consistent with IC10)
+        - Fix crash with scripts containing % char in name/title (thx @TheOutride)
+        - Keep library objects in sync between editors and library window (thx @VFox32)
 
   </ChangeLog>
   <Tags>
