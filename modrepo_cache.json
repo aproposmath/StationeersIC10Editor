@@ -218,26 +218,6 @@
         "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/v0.8.8/IC10Editor-v0.8.8.zip",
         "version": "0.8.8"
     },
-    "sha256:9794e5e4354e058c520f9cdf46b2a9e210945d3b786f50e38c1f6672d74dd722": {
-        "author": "aproposmath",
-        "branch": [
-            "main"
-        ],
-        "depends_on": [],
-        "digest": "sha256:9794e5e4354e058c520f9cdf46b2a9e210945d3b786f50e38c1f6672d74dd722",
-        "id": "com.github.aproposmath.StationeersIC10Editor",
-        "name": "IC10 Editor",
-        "tag": [
-            "IC10",
-            "Editor",
-            "Code",
-            "BepInEx",
-            "VIM",
-            "StationeersLaunchPad"
-        ],
-        "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/main/IC10Editor-main.zip",
-        "version": "0.9.99.1-dev"
-    },
     "sha256:b88ce76fd399b9c8a834b4fb72b512f8f0a93afc977c969d7cfb4c4a2f9af615": {
         "author": "aproposmath",
         "branch": [],
@@ -273,6 +253,26 @@
         ],
         "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/v0.8.6/IC10Editor-v0.8.6.zip",
         "version": "0.8.6"
+    },
+    "sha256:d30fb708f6a7740c9adebbf6ef1f7c22c5ebf68acd20a56a6a841310cc5b5f8f": {
+        "author": "aproposmath",
+        "branch": [
+            "main"
+        ],
+        "depends_on": [],
+        "digest": "sha256:d30fb708f6a7740c9adebbf6ef1f7c22c5ebf68acd20a56a6a841310cc5b5f8f",
+        "id": "com.github.aproposmath.StationeersIC10Editor",
+        "name": "IC10 Editor",
+        "tag": [
+            "IC10",
+            "Editor",
+            "Code",
+            "BepInEx",
+            "VIM",
+            "StationeersLaunchPad"
+        ],
+        "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/main/IC10Editor-main.zip",
+        "version": "0.9.9.27-dev"
     },
     "sha256:d7841d0fa9826f9db22014646b3cec9927e9c79a95189e5a71981c71cd0d6856": {
         "author": "aproposmath",

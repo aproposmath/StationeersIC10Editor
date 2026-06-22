@@ -3,11 +3,11 @@
   >
   <ModVersion
       ModID="com.github.aproposmath.StationeersIC10Editor"
-      Version="0.9.99.1-dev"
+      Version="0.9.9.27-dev"
       Name="IC10 Editor"
       Author="aproposmath"
       Url="https://github.com/aproposmath/StationeersIC10Editor/releases/download/main/IC10Editor-main.zip"
-      Digest="sha256:9794e5e4354e058c520f9cdf46b2a9e210945d3b786f50e38c1f6672d74dd722"
+      Digest="sha256:d30fb708f6a7740c9adebbf6ef1f7c22c5ebf68acd20a56a6a841310cc5b5f8f"
     >
     <Branch
         Value="main"
