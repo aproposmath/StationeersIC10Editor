@@ -652,7 +652,7 @@ public class FileHistoryWindow
         using var _ = new ScopedStyleVar(ImGuiStyleVar.FrameRounding, 2.0f);
         ImGui.SetNextWindowSize(new Vector2(1300, 800), ImGuiCond.FirstUseEver);
         Settings.SetImGuiWindowCollapsed();
-        var title = Library?.Data?.Title ?? "<no data>";
+        var title = Library.Title ?? "<no data>";
         ImGui.Begin($"Version History: {title}", ref IsOpen, ImGuiWindowFlags.NoSavedSettings);
         using var _bg = new ScopedStyleColor([ImGuiCol.HeaderHovered, ImGuiCol.HeaderActive, ImGuiCol.Header], ColorSelected);
         using (new Pane("Versions", 0.4f, -1))
