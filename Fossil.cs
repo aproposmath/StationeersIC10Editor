@@ -474,6 +474,8 @@ public class FileHistoryWindow
 
     static readonly uint ColorAdded = ICodeFormatter.ColorFromHTML("#1a3a1a");
     static readonly uint ColorRemoved = ICodeFormatter.ColorFromHTML("#3a1a1a");
+    static readonly uint ColorSelected = ICodeFormatter.ColorFromHTML("#303080");
+    static readonly uint ColorTag = ICodeFormatter.ColorFromHTML("#ffcc00");
 
     public FileHistoryWindow(VersionedScript library)
     {
@@ -643,8 +645,6 @@ public class FileHistoryWindow
         }
     }
 
-    public static readonly uint ColorNumber = ICodeFormatter.ColorFromHTML("#40e2ba");
-
     public void Draw()
     {
         if (!IsOpen)
@@ -654,6 +654,7 @@ public class FileHistoryWindow
         Settings.SetImGuiWindowCollapsed();
         var title = Library?.Data?.Title ?? "<no data>";
         ImGui.Begin($"Version History: {title}", ref IsOpen, ImGuiWindowFlags.NoSavedSettings);
+        using var _bg = new ScopedStyleColor([ImGuiCol.HeaderHovered, ImGuiCol.HeaderActive, ImGuiCol.Header], ColorSelected);
         using (new Pane("Versions", 0.4f, -1))
         {
             if (ImGui.RadioButton("Commits", _showTags == false)) SetShowTags(false);
@@ -663,7 +664,7 @@ public class FileHistoryWindow
             ImGui.Separator();
             foreach (var version in Versions)
             {
-                using var style = new ScopedStyleColor(ImGuiCol.Text, ICodeFormatter.ColorNumber, version.Tags.Count > 0);
+                using var style = new ScopedStyleColor(ImGuiCol.Text, ColorTag, version.Tags.Count > 0);
                 if (ImGui.Selectable(version.Label, SelectedVersion == version) && SelectedVersion != version)
                     SelectVersion(version);
             }
