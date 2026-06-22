@@ -55,26 +55,6 @@
         "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/v0.9.4/IC10Editor-v0.9.4.zip",
         "version": "0.9.4"
     },
-    "sha256:3477c1ab6401ac1b370fe668fa255a738432d89081613bbb54ef91ef1c48f5cb": {
-        "author": "aproposmath",
-        "branch": [
-            "main"
-        ],
-        "depends_on": [],
-        "digest": "sha256:3477c1ab6401ac1b370fe668fa255a738432d89081613bbb54ef91ef1c48f5cb",
-        "id": "com.github.aproposmath.StationeersIC10Editor",
-        "name": "IC10 Editor",
-        "tag": [
-            "IC10",
-            "Editor",
-            "Code",
-            "BepInEx",
-            "VIM",
-            "StationeersLaunchPad"
-        ],
-        "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/main/IC10Editor-main.zip",
-        "version": "0.9.9.23-dev"
-    },
     "sha256:349bec1a1d79819af70366f8905868f8d53ce7c17db7ccaf8a6dd1d4b3e2eda4": {
         "author": "aproposmath",
         "branch": [],
@@ -237,6 +217,26 @@
         ],
         "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/v0.8.8/IC10Editor-v0.8.8.zip",
         "version": "0.8.8"
+    },
+    "sha256:b1d9a09d29d5ae28c6686e30d6c8a1bcb44d0d6b3947ad0ca5c02cae9fd2012c": {
+        "author": "aproposmath",
+        "branch": [
+            "main"
+        ],
+        "depends_on": [],
+        "digest": "sha256:b1d9a09d29d5ae28c6686e30d6c8a1bcb44d0d6b3947ad0ca5c02cae9fd2012c",
+        "id": "com.github.aproposmath.StationeersIC10Editor",
+        "name": "IC10 Editor",
+        "tag": [
+            "IC10",
+            "Editor",
+            "Code",
+            "BepInEx",
+            "VIM",
+            "StationeersLaunchPad"
+        ],
+        "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/main/IC10Editor-main.zip",
+        "version": "0.9.9.24-dev"
     },
     "sha256:b88ce76fd399b9c8a834b4fb72b512f8f0a93afc977c969d7cfb4c4a2f9af615": {
         "author": "aproposmath",
