@@ -39,10 +39,11 @@
         Features:
         - Search/replace window (Ctrl+F)
         - Tags for version control, fix bug in diff view
-        - Minify only works for library scripts now, minified code is shown side-by-side with original code in editor
-        - Append '# KEEP' to a line to keep them when minifying (also keeps defines/aliases)
-        - Error message when using a label as relative jump target
-        - Show tooltip with value for alias/defined names
+        - Better Minify workflow: show minified code side-by-side
+        - Minify bypass: Append '# KEEP' to a line to keep it (also keeps defines/aliases/comments)
+        - Error message when using a label as relative jump target (thx @FlorpyDorp)
+        - Better tooltips for alias/defined names 
+        - Ctrl+Click for defined prefab hashes
         - Add Commit button to library window (thx @VFox32)
         
         Fixes:
@@ -52,7 +53,7 @@
         - Fix commiting all changes (thx @Electrolyte)
         - Fix handling BasicEnum values in define (thx @Electrolyte)
         - Don't allow scientific notation for numbers (to be consistent with IC10)
-        - Fix crash with scripts containing % char in name/title (thx @TheOutride)
+        - Fix crash with scripts containing '%' char in name/title (thx @TheOutride)
         - Keep library objects in sync between editors and library window (thx @VFox32)
 
   </ChangeLog>
