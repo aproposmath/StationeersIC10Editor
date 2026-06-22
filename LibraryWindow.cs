@@ -918,6 +918,9 @@ public static class LibraryWindow
         while (workshopDone)
             workshopDone = await LoadWorkshopScripts(++page);
 
+        if (Window == null)
+            return;
+
         // iterate over all scripts in all editor tabs and replace the VersionedScript reference with the newly loaded one (to update file states and workshop info)
         foreach (var tab in Window.Tabs)
             foreach (var editor in tab.Editors)
