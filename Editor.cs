@@ -1415,7 +1415,7 @@ public class EditorWindow
         }
 
         ActiveTab.Save();
-        MotherboardTab[0].ResetCode(ActiveEditor.Code);
+        MotherboardTab[0].ResetCode(ActiveEditor.CodeFormatter.Compile());
         MotherboardTab[0].Save();
         MotherboardTab[0].PCM.Export();
         HideWindow();
