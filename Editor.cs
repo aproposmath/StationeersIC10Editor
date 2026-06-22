@@ -1509,14 +1509,14 @@ public class EditorWindow
 
         ImGui.SameLine();
 
-        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 2 * ImGui.GetStyle().ItemSpacing.x);
+        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 0.5f * ImGui.GetStyle().ItemSpacing.x);
 
-        if (Button("?", smallButtonSize, "Help/Configuration Menu"))
+        if (Button("?", miniButtonSize, "Help/Configuration Menu"))
             HelpWindow.IsOpen = !HelpWindow.IsOpen;
 
         ImGui.SameLine();
 
-        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 2 * ImGui.GetStyle().ItemSpacing.x);
+        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 0.5f * ImGui.GetStyle().ItemSpacing.x);
 
         if (Button("History", buttonSize, "Version History (Ctrl+H)", !HasFileVCS))
             ActiveTab.OpenVersionWindow();

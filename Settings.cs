@@ -26,6 +26,7 @@ public static class Settings
     public static Vector2 largeButtonSize => Scale * new Vector2(120, 30);
     public static Vector2 buttonSize => Scale * new Vector2(85, 30);
     public static Vector2 smallButtonSize => Scale * new Vector2(50, 30);
+    public static Vector2 miniButtonSize => Scale * new Vector2(35, 30);
 
     public const string LimitExceededMessage = "Size limit exceeded: cannot save or export.";
 
