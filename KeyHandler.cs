@@ -588,11 +588,23 @@ public class KeyHandler
     {
         var name = Editor.GetCode(Editor.GetWordAt(pos));
 
-        if (Int32.TryParse(name, out var hash))
+        var ic10formatter = Editor.CodeFormatter as IC10.IC10CodeFormatter;
+        if (ic10formatter != null && ic10formatter.IsDefinedValue(name, out var defineValue))
+        {
+            name = defineValue;
+        }
+
+        if (int.TryParse(name, out var hash))
         {
             var thing = Prefab.Find<Thing>(hash);
             if (thing == null) return;
             name = thing.PrefabName;
+        }
+        else if (name.StartsWith("HASH"))
+        {
+            var tokens = name.Split(new[] { '"' }, StringSplitOptions.RemoveEmptyEntries);
+            if (tokens.Length > 1)
+                name = tokens[1];
         }
 
         name = "Thing" + name;

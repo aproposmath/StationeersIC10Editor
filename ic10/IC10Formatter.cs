@@ -306,6 +306,27 @@ public class IC10CodeFormatter : StaticFormatter
         UpdateTokens(line);
     }
 
+    public bool IsDefinedValue(string name, out string value)
+    {
+        if (defines.TryGetValue(name, out var identifier))
+        {
+            value = identifier.Value;
+            return true;
+        }
+        if (regAliases.TryGetValue(name, out identifier))
+        {
+            value = identifier.Value;
+            return true;
+        }
+        if (devAliases.TryGetValue(name, out identifier))
+        {
+            value = identifier.Value;
+            return true;
+        }
+        value = null;
+        return false;
+    }
+
     public void SetDefinedValueTooltip(Token token)
     {
         var name = token.Text;
@@ -318,6 +339,15 @@ public class IC10CodeFormatter : StaticFormatter
             [
                 StyledLine.FromString($"{identifier.Value}", GetColor((DataType)token.Type, name))
             ];
+
+            var prefabName = IC10Utils.GetLogicablePrefabName(identifier.Value);
+
+            if (prefabName != null)
+            {
+                token.Tooltip.Add(StyledLine.FromString($"{prefabName}", ColorFromHTML("#00ff00")));
+                token.Tooltip.Add(StyledLine.FromString(""));
+                token.Tooltip.Add(StyledLine.FromString("Ctrl+Click to open Stationpedia", ColorFromHTML("#A0A0A0")));
+            }
         }
     }
 
