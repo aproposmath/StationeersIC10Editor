@@ -82,6 +82,7 @@ public class IC10Utils
 
     private static void _addType(string name, DataType type)
     {
+        if (string.IsNullOrEmpty(name)) return;
         if (!_types.ContainsKey(name))
             _types[name] = type;
         else
@@ -99,6 +100,7 @@ public class IC10Utils
 
         foreach (var enumName in Enum.GetNames(typeof(T)))
         {
+            if (string.IsNullOrEmpty(enumName)) continue;
             _addType(name + enumName, DataType.BasicEnum);
             _basicEnums.Add(name + enumName);
         }
@@ -339,6 +341,7 @@ public class IC10Utils
         foreach (ScriptCommand cmd in EnumCollections.ScriptCommands.Values)
         {
             string cmdName = Enum.GetName(typeof(ScriptCommand), cmd);
+            if (string.IsNullOrEmpty(cmdName)) continue;
             var description = ProgrammableChip.GetCommandDescription(cmd);
             var example = ProgrammableChip.GetCommandExample(cmd);
             _instructions[cmdName] = new IC10OpCode(cmdName, description, example);
