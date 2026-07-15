@@ -55,6 +55,26 @@
         "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/debug/IC10Editor-debug.zip",
         "version": "0.9.9.7-dev"
     },
+    "sha256:1d547136e84eeb5222e8b5455ced0a368393673bf2ee6bd0729e9211ce66d1b3": {
+        "author": "aproposmath",
+        "branch": [
+            "main"
+        ],
+        "depends_on": [],
+        "digest": "sha256:1d547136e84eeb5222e8b5455ced0a368393673bf2ee6bd0729e9211ce66d1b3",
+        "id": "com.github.aproposmath.StationeersIC10Editor",
+        "name": "IC10 Editor",
+        "tag": [
+            "IC10",
+            "Editor",
+            "Code",
+            "BepInEx",
+            "VIM",
+            "StationeersLaunchPad"
+        ],
+        "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/main/IC10Editor-main.zip",
+        "version": "0.9.99.1-dev"
+    },
     "sha256:1fdf6a5e2191ae3f06be298323036419bab5145dcd9ebb722992b2aacdc9ecf7": {
         "author": "aproposmath",
         "branch": [],
@@ -162,26 +182,6 @@
         ],
         "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/v0.9.3/IC10Editor-v0.9.3.zip",
         "version": "0.9.3"
-    },
-    "sha256:78ffda145dcbcb58ab23cb3a09144373d9d70b0d66060c0ca6b0ac7f4b2426c2": {
-        "author": "aproposmath",
-        "branch": [
-            "main"
-        ],
-        "depends_on": [],
-        "digest": "sha256:78ffda145dcbcb58ab23cb3a09144373d9d70b0d66060c0ca6b0ac7f4b2426c2",
-        "id": "com.github.aproposmath.StationeersIC10Editor",
-        "name": "IC10 Editor",
-        "tag": [
-            "IC10",
-            "Editor",
-            "Code",
-            "BepInEx",
-            "VIM",
-            "StationeersLaunchPad"
-        ],
-        "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/main/IC10Editor-main.zip",
-        "version": "0.9.9.31-dev"
     },
     "sha256:857c6d7f627ebfba99c5bf1de4e86578e244704d9d58c115639cbe0668a7338c": {
         "author": "aproposmath",
