@@ -8,6 +8,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Serialization;
 
@@ -115,9 +116,41 @@ public class FossilVCS
     public static readonly string RepoFileName = ".fossil.repo";
     public static readonly string RepoFilePath = Path.Combine(ScriptsDir, RepoFileName);
     public static int KeepBackupCount = 50;
+    private static readonly SemaphoreSlim _operationLock = new(1, 1);
 
 
     public static async UniTask<string> RunAsync(string args)
+    {
+        return await RunExclusive(() => RunProcessAsync(args));
+    }
+
+    private static async UniTask RunExclusive(Func<UniTask> action)
+    {
+        await _operationLock.WaitAsync();
+        try { await action(); }
+        finally { _operationLock.Release(); }
+    }
+
+    private static async UniTask<T> RunExclusive<T>(Func<UniTask<T>> action)
+    {
+        await _operationLock.WaitAsync();
+        try { return await action(); }
+        finally { _operationLock.Release(); }
+    }
+
+    private static async UniTask<string> RunProcessAsync(string args)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try { return await RunProcessOnceAsync(args); }
+            catch (Exception ex) when (attempt < 2 && ex.Message.IndexOf("database is locked", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                await UniTask.Delay(100 * (attempt + 1));
+            }
+        }
+    }
+
+    private static async UniTask<string> RunProcessOnceAsync(string args)
     {
         L.Debug($"Running Fossil command: \"{args}\" at \"{ScriptsDir}\"");
         var sw = Stopwatch.StartNew();
@@ -237,18 +270,21 @@ public class FossilVCS
 
         await MakeBackup();
 
-        if (!File.Exists(RepoFilePath))
-            await RunAsync($"init {repoName}");
-
         try
         {
-            if ((await RunAsync("status -b")).Trim() == "none")
-                await RunAsync($"open -k {repoName}");
+            await RunExclusive(async () =>
+            {
+                if (!File.Exists(RepoFilePath))
+                    await RunProcessAsync($"init {repoName}");
 
-            if ((await RunAsync("status -b")).Trim() == "none")
-                throw new Exception("Failed to open Fossil repository");
+                if ((await RunProcessAsync("status -b")).Trim() == "none")
+                    await RunProcessAsync($"open -k {repoName}");
 
-            await RunAsync("settings ignore-glob \"*/*.png,*.vdf\"");
+                if ((await RunProcessAsync("status -b")).Trim() == "none")
+                    throw new Exception("Failed to open Fossil repository");
+
+                await RunProcessAsync("settings ignore-glob \"*/*.png,*.vdf\"");
+            });
         }
         catch (Exception ex)
         {
@@ -266,23 +302,23 @@ public class FossilVCS
         if (string.IsNullOrEmpty(message))
             message = $"Update {paths}";
         message = message.Replace("\"", "'");
-        await RunAsync($"add {arg}");
-        await RunAsync($"commit --no-warnings -m \"{message}\" {arg}");
+        await RunExclusive(async () =>
+        {
+            await RunProcessAsync($"add {arg}");
+            await RunProcessAsync($"commit --no-warnings -m \"{message}\" {arg}");
+        });
         await LibraryWindow.LoadScripts();
     }
 
     public static async UniTask<FileState> GetFileState(string path)
     {
-        if ((await RunAsync("extra")).Contains(path))
-            return FileState.Untracked;
-        var diff = await RunAsync("ls -v");
-        // L.Debug($"diff: {diff}");
-        if (diff.Contains("UNCHANGED  " + path))
+        return await RunExclusive(async () =>
         {
-            // L.Debug($"File {path} is unchanged");
-            return FileState.Unchanged;
-        }
-        return FileState.Modified;
+            if ((await RunProcessAsync("extra")).Contains(path))
+                return FileState.Untracked;
+            var diff = await RunProcessAsync("ls -v");
+            return diff.Contains("UNCHANGED  " + path) ? FileState.Unchanged : FileState.Modified;
+        });
     }
 
 
@@ -295,40 +331,45 @@ public class FossilVCS
 
     public static async UniTask<Dictionary<string, FileState>> GetFileStates()
     {
-        var result = new Dictionary<string, FileState>();
-        static string GetName(string path) => path.Split('/')[0];
-
-        var extraPromise = RunAsync("extra");
-        var ls = await RunAsync("ls -v");
-        var extra = await extraPromise;
-
-        foreach (var path in extra.Split('\n'))
-            result[GetName(path)] = FileState.Untracked;
-        var missingPaths = new List<string>();
-        foreach (var line in ls.Split('\n'))
+        return await RunExclusive(async () =>
         {
-            // L.Debug($"ls line: |{line}|");
-            var trimmed = line.Trim();
-            if (string.IsNullOrEmpty(trimmed) || !trimmed.EndsWith("instruction.xml"))
-                continue;
-            var stateString = trimmed.Substring(0, trimmed.IndexOf(' '));
-            if (stateString == "MISSING")
-                missingPaths.Add(trimmed.Substring(11));
-            else if (_StatesMap.TryGetValue(stateString, out var state))
-                result[GetName(trimmed.Substring(11))] = state;
-            else if (stateString != "DELETED")
-                L.Warning($"Unknown fossil state state: {stateString}");
-        }
+            var result = new Dictionary<string, FileState>();
+            static string GetName(string path) => path.Split('/')[0];
 
-        if (missingPaths.Count > 0)
-        {
-            var arg = "";
-            foreach (var path in missingPaths)
-                arg += $" \"{path}\"";
-            await RunAsync($"rm {arg}");
-            await RunAsync($"commit -m \"Deleted\"");
-        }
-        return result;
+            var extra = await RunProcessAsync("extra");
+            var ls = await RunProcessAsync("ls -v");
+
+            foreach (var path in extra.Split('\n'))
+                result[GetName(path)] = FileState.Untracked;
+            var missingPaths = new List<string>();
+            var hasDeleted = false;
+            foreach (var line in ls.Split('\n'))
+            {
+                var trimmed = line.Trim();
+                if (string.IsNullOrEmpty(trimmed) || !trimmed.EndsWith("instruction.xml"))
+                    continue;
+                var stateString = trimmed.Substring(0, trimmed.IndexOf(' '));
+                if (stateString == "MISSING")
+                    missingPaths.Add(trimmed.Substring(11));
+                else if (stateString == "DELETED")
+                    hasDeleted = true;
+                else if (_StatesMap.TryGetValue(stateString, out var state))
+                    result[GetName(trimmed.Substring(11))] = state;
+                else
+                    L.Warning($"Unknown fossil state state: {stateString}");
+            }
+
+            if (missingPaths.Count > 0)
+            {
+                var arg = "";
+                foreach (var path in missingPaths)
+                    arg += $" \"{path}\"";
+                await RunProcessAsync($"rm {arg}");
+            }
+            if (missingPaths.Count > 0 || hasDeleted)
+                await RunProcessAsync("commit -m \"Deleted\"");
+            return result;
+        });
     }
 
     public static async UniTask<List<FileVersion>> Log(string path)

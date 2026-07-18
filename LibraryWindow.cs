@@ -473,6 +473,8 @@ public static class LibraryWindow
     // private static ConfirmWindow _confirmDeleteLibWindow = null;
     private static bool _needsUpdate = false;
     private static bool _needsReloadAll = false;
+    private static bool _isLoadingScripts = false;
+    private static bool _reloadPending = false;
     private static readonly List<VersionedScript> _scriptsToReload = [];
     private static FileHistoryWindow _fileHistoryWindow = null;
     private static Editor _previewEditor = null;
@@ -898,6 +900,34 @@ public static class LibraryWindow
     }
 
     public static async UniTask LoadScripts()
+    {
+        if (_isLoadingScripts)
+        {
+            _reloadPending = true;
+            return;
+        }
+
+        _isLoadingScripts = true;
+        try
+        {
+            do
+            {
+                _reloadPending = false;
+                await LoadScriptsOnce();
+            }
+            while (_reloadPending);
+        }
+        catch (Exception ex)
+        {
+            L.Error($"Failed to load scripts: {ex.Message}");
+        }
+        finally
+        {
+            _isLoadingScripts = false;
+        }
+    }
+
+    private static async UniTask LoadScriptsOnce()
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         uint page = 1;
