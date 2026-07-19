@@ -944,9 +944,9 @@ public static class LibraryWindow
         foreach (var script in LocalScripts)
             script.UpdateFileState(fileStates);
 
-        var workshopDone = await loadWorkshopTask;
-        while (workshopDone)
-            workshopDone = await LoadWorkshopScripts(++page);
+        var workshopPageNotEmpty = await loadWorkshopTask;
+        while (workshopPageNotEmpty)
+            workshopPageNotEmpty = await LoadWorkshopScripts(++page);
 
         if (Window == null)
             return;

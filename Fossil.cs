@@ -342,7 +342,7 @@ public class FossilVCS
             foreach (var path in extra.Split('\n'))
                 result[GetName(path)] = FileState.Untracked;
             var missingPaths = new List<string>();
-            var hasDeleted = false;
+            var deletedPaths = new List<string>();
             foreach (var line in ls.Split('\n'))
             {
                 var trimmed = line.Trim();
@@ -352,7 +352,7 @@ public class FossilVCS
                 if (stateString == "MISSING")
                     missingPaths.Add(trimmed.Substring(11));
                 else if (stateString == "DELETED")
-                    hasDeleted = true;
+                    deletedPaths.Add(trimmed.Substring(11));
                 else if (_StatesMap.TryGetValue(stateString, out var state))
                     result[GetName(trimmed.Substring(11))] = state;
                 else
@@ -365,9 +365,16 @@ public class FossilVCS
                 foreach (var path in missingPaths)
                     arg += $" \"{path}\"";
                 await RunProcessAsync($"rm {arg}");
+                await RunProcessAsync($"commit -m \"Deleted\" {arg}");
             }
-            if (missingPaths.Count > 0 || hasDeleted)
-                await RunProcessAsync("commit -m \"Deleted\"");
+            if (deletedPaths.Count > 0)
+            {
+                var arg = "";
+                foreach (var path in deletedPaths)
+                    arg += $" \"{path}\"";
+                L.Info($"Fossil, committing deleted paths: {arg}");
+                await RunProcessAsync($"commit -m \"Deleted\" {arg}");
+            }
             return result;
         });
     }
