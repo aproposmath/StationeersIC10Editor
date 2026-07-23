@@ -4,7 +4,7 @@
   <Author>aproposmath</Author>
   <ModID>com.github.aproposmath.StationeersIC10Editor</ModID>
   <WorkshopHandle>3592775931</WorkshopHandle>
-  <Version>0.9.99</Version>
+  <Version>0.9.100</Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
 
@@ -34,27 +34,11 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        0.9.99:
-        
-        Features:
-        - Search/replace window (Ctrl+F)
-        - Tags for version control, fix bug in diff view
-        - Better Minify workflow: show minified code side-by-side
-        - Minify bypass: Append '# KEEP' to a line to keep it (also keeps defines/aliases/comments)
-        - Error message when using a label as relative jump target (thx @FlorpyDorp)
-        - Better tooltips for alias/defined names 
-        - Ctrl+Click for defined prefab hashes
-        - Add Commit button to library window (thx @VFox32)
+        0.9.100:
         
         Fixes:
-        - Fix language detection (would detect Markdown instead of IC10 sometimes, thx @VFox32)
-        - Get rid of (allmost?) all memory allocations during rendering (thx @Rocket for pointing out how bad this is :) )
-        - Fix inconsistent timezeone in Version History and Library Window (thx @Electrolyte)
-        - Fix commiting all changes (thx @Electrolyte)
-        - Fix handling BasicEnum values in define (thx @Electrolyte)
-        - Don't allow scientific notation for numbers (to be consistent with IC10)
-        - Fix crash with scripts containing '%' char in name/title (thx @TheOutride)
-        - Keep library objects in sync between editors and library window (thx @VFox32)
+        - Fix race condition in Fossil VCS interface when deleting files, thx @BlackFranky
+        - Fix broken parser when other mods add unnamed enum values (instructions, logic types), thx @WreckerRecreation
 
   </ChangeLog>
   <Tags>
