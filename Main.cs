@@ -22,6 +22,7 @@ public class IC10EditorPlugin : BaseUnityPlugin
     public static ConfigEntry<bool> EnforceLineLimit;
     public static ConfigEntry<bool> EnforceByteLimit;
     public static ConfigEntry<bool> EnableAutoComplete;
+    public static ConfigEntry<int> IndentWidth;
     public static ConfigEntry<float> ScaleFactor;
     public static ConfigEntry<float> TooltipDelay;
     public static ConfigEntry<int> LineSpacingOffset;
@@ -108,6 +109,12 @@ public class IC10EditorPlugin : BaseUnityPlugin
             "Autocompletion",
             true,
             "Enable autocompletion/suggestions (trigger with Tab key)"
+        );
+        IndentWidth = Config.Bind(
+            "General",
+            "Indent Width",
+            2,
+            "The number of spaces to add per indentation level"
         );
         CollapseOnGameWindow = Config.Bind(
             "General",
