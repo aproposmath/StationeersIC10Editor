@@ -786,7 +786,7 @@ public class KeyHandler
         }
     }
 
-    public void HandleInsertMode()
+    public void HandleInsertMode(bool ctrlDown, bool shiftDown, bool altDown)
     {
         var io = ImGui.GetIO();
 
@@ -853,20 +853,40 @@ public class KeyHandler
             Editor.ScrollToCaret += 1; // we need to scroll to caret in the next two frames, one for updating the scroll area, one to actually scroll there
         }
 
+        if (ImGui.IsKeyPressed(ImGuiKey.Tab))
+        {
+            OnKeyPressed("Tab");
+            string indentString = new string(' ', Settings.IndentWidth);
+            string lineStart = CurrentLine.Substring(0, CaretCol);
+            if (shiftDown)
+            {
+                if (lineStart.EndsWith(indentString))
+                {
+                    Editor.PushUndoState(false);
+                    CurrentLine = CurrentLine.Remove(CaretCol - indentString.Length, indentString.Length);
+                    CaretCol -= indentString.Length;
+                }
+            }
+            else if (string.IsNullOrWhiteSpace(lineStart))
+            {
+                Editor.PushUndoState(false);
+                CurrentLine = CurrentLine.Insert(CaretCol, indentString);
+                CaretCol += indentString.Length;
+            }
+            else
+            {
+                Editor.PushUndoState();
+                Editor.CodeFormatter.PerformAutocomplete();
+            }
+            return;
+        }
+
         string input = string.Empty;
         for (int i = 0; i < io.InputQueueCharacters.Size; i++)
         {
             char c = (char)io.InputQueueCharacters[i];
-            if (c == '\t')
-            {
-                string lineStart = CurrentLine.Substring(0, CaretCol);
-                if (string.IsNullOrWhiteSpace(lineStart))
-                    input += "  ";
-                else
-                    Editor.CodeFormatter.PerformAutocomplete();
-
-            }
-            else
+            // We already handled tab inputs above
+            if (c != '\t')
                 input += c;
         }
 
@@ -1088,7 +1108,7 @@ public class KeyHandler
         HandleCommon(ctrlDown, shiftDown, altDown);
 
         if (Mode == KeyMode.Insert)
-            HandleInsertMode();
+            HandleInsertMode(ctrlDown, shiftDown, altDown);
         if (Mode == KeyMode.VimNormal || Mode == KeyMode.VimVisual)
             HandleVimNormalVisualMode(ctrlDown, shiftDown, altDown);
     }

@@ -16,6 +16,7 @@ public static class Settings
     public static float TooltipDelay => IC10EditorPlugin.TooltipDelay.Value;
     public static float Scale => Mathf.Clamp(IC10EditorPlugin.ScaleFactor.Value, 0.25f, 5.0f);
     public static bool EnableAutoComplete => IC10EditorPlugin.EnableAutoComplete.Value;
+    public static int IndentWidth => IC10EditorPlugin.IndentWidth.Value;
     public static int LineSpacingOffset => IC10EditorPlugin.LineSpacingOffset.Value;
     public static bool CollapseOnGameWindow => IC10EditorPlugin.CollapseOnGameWindow.Value;
     public static bool RelativeLineNumbers => IC10EditorPlugin.RelativeLineNumbers.Value;
