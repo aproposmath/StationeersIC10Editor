@@ -37,6 +37,7 @@
         0.9.101:
         
         - Unindent on shift+tab, configurable indent width (huge thx @glektarssza)
+        - (Possibly) fix several version control bugs (thx @Zurku, @Largely Unemployed, @George, @Trekki for reporting, especially the stack trace by @George was super helpful)
 
   </ChangeLog>
   <Tags>

@@ -52,9 +52,9 @@ public class VersionedScript(InstructionData data)
 
     public void UpdateFileState(Dictionary<string, FileState> fileStates)
     {
-        // check if path is subdir of FossilVCS.ScriptDir
-        if (Data.DirectoryPath.Parent.FullName != FossilVCS.ScriptsDir)
+        if (!FossilVCS.IsScriptsDir(Data.DirectoryPath.Parent))
         {
+            L.Warning($"Local script is outside Fossil directory: {Data.DirectoryPath.Parent.FullName} != {FossilVCS.ScriptsDir}");
             State = FileState.Workshop;
             return;
         }
@@ -647,8 +647,28 @@ public static class LibraryWindow
         _confirmWindow = new ConfirmWindow($"Commit all changed files", msg, "Message");
         _confirmWindow.OnConfirm = () =>
         {
-            FossilVCS.AddAndCommit([.. paths], _confirmWindow.UserInput).Forget();
+            CommitAndReportAsync([.. paths], _confirmWindow.UserInput).Forget();
         };
+    }
+
+    private static async UniTask CommitAndReportAsync(string[] paths, string message)
+    {
+        try { await FossilVCS.AddAndCommit(paths, message); }
+        catch (Exception ex) { ReportCommitFailure(ex); }
+    }
+
+    private static async UniTask CommitAndReportAsync(VersionedScript script, string message)
+    {
+        try { await CommitAsync(script, message); }
+        catch (Exception ex) { ReportCommitFailure(ex); }
+    }
+
+    private static void ReportCommitFailure(Exception ex)
+    {
+        L.Error($"Failed to commit: {ex}");
+        var keyHandler = Window?.ActiveEditor?.KeyHandler;
+        if (keyHandler != null)
+            keyHandler.CommandStatus = $"Failed to commit: {ex.Message}";
     }
 
     public static void CreateFolder(string prefix = null)
@@ -722,7 +742,7 @@ public static class LibraryWindow
         {
             var msg = _confirmWindow.UserInput;
             script.Save();
-            CommitAsync(script, msg).Forget();
+            CommitAndReportAsync(script, msg).Forget();
         };
     }
 

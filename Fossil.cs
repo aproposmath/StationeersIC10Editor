@@ -27,7 +27,7 @@ using static ImGuiUtils;
 public static class FossilInstaller
 {
     public static string CacheDir => Path.Combine(BepInEx.Paths.CachePath, "ic10editor");
-    public static readonly string ScriptsDir = StationSaveUtils.GetSavePathScriptsSubDir().FullName;
+    public static string ScriptsDir => StationSaveUtils.GetSavePathScriptsSubDir().FullName;
 
     public static bool IsWine()
     {
@@ -110,13 +110,19 @@ public static class FossilInstaller
 
 public class FossilVCS
 {
-    public static readonly string ScriptsDir = FossilInstaller.ScriptsDir;
+    public static string ScriptsDir => FossilInstaller.ScriptsDir;
     public static readonly string CacheDir = FossilInstaller.CacheDir;
     public static readonly string BackupDir = Path.Combine(CacheDir, "backups");
     public static readonly string RepoFileName = ".fossil.repo";
-    public static readonly string RepoFilePath = Path.Combine(ScriptsDir, RepoFileName);
+    public static string RepoFilePath => Path.Combine(ScriptsDir, RepoFileName);
     public static int KeepBackupCount = 50;
     private static readonly SemaphoreSlim _operationLock = new(1, 1);
+
+    public static bool IsScriptsDir(DirectoryInfo directory)
+    {
+        static string Normalize(string path) => Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return string.Equals(Normalize(directory.FullName), Normalize(ScriptsDir), StringComparison.OrdinalIgnoreCase);
+    }
 
 
     public static async UniTask<string> RunAsync(string args)
@@ -154,6 +160,10 @@ public class FossilVCS
     {
         L.Debug($"Running Fossil command: \"{args}\" at \"{ScriptsDir}\"");
         var sw = Stopwatch.StartNew();
+        if (!File.Exists(FossilInstaller.FossilExe))
+            throw new FileNotFoundException("Fossil executable was not found", FossilInstaller.FossilExe);
+        if (!Directory.Exists(ScriptsDir))
+            throw new DirectoryNotFoundException($"Fossil scripts directory was not found: {ScriptsDir}");
         // await UniTask.SwitchToThreadPool();
         var psi = new ProcessStartInfo
         {
@@ -207,7 +217,8 @@ public class FossilVCS
             L.Info("\t" + output.ToString());
             var stdErr = error.ToString();
             L.Info("\t" + stdErr);
-            throw new Exception(stdErr);
+            var message = string.IsNullOrWhiteSpace(stdErr) ? output.ToString() : stdErr;
+            throw new InvalidOperationException($"Fossil command failed with exit code {exitCode}: {message.Trim()}");
         }
 
         L.Debug($"\tcommand |{args}| took {sw.ElapsedMilliseconds}ms");
