@@ -394,14 +394,8 @@ public class VimCommand
             case "<<":
             case ">>":
                 editor.PushUndoState(false);
-                for (int line = range.Start.Line; line <= range.End.Line; line++)
-                {
-                    var currentLine = editor.Lines[line].Text;
-                    if (Command == "<<" && currentLine.StartsWith("  "))
-                        editor.ReplaceLine(line, currentLine.Substring(2));
-                    else if (Command == ">>")
-                        editor.ReplaceLine(line, "  " + currentLine);
-                }
+                var indentWidth = Command == "<<" ? -Settings.IndentWidth : Settings.IndentWidth;
+                editor.IndentLines(range, indentWidth);
                 break;
             case "gf":
                 Handler.OpenStationPedia(editor.CaretPos);
@@ -856,22 +850,17 @@ public class KeyHandler
         if (ImGui.IsKeyPressed(ImGuiKey.Tab))
         {
             OnKeyPressed("Tab");
-            string indentString = new string(' ', Settings.IndentWidth);
             string lineStart = CurrentLine.Substring(0, CaretCol);
-            if (shiftDown)
-            {
-                if (lineStart.EndsWith(indentString))
-                {
-                    Editor.PushUndoState(false);
-                    CurrentLine = CurrentLine.Remove(CaretCol - indentString.Length, indentString.Length);
-                    CaretCol -= indentString.Length;
-                }
-            }
-            else if (string.IsNullOrWhiteSpace(lineStart))
+            int indentWidth = shiftDown ? -Settings.IndentWidth : Settings.IndentWidth;
+            if (Editor.Selection)
             {
                 Editor.PushUndoState(false);
-                CurrentLine = CurrentLine.Insert(CaretCol, indentString);
-                CaretCol += indentString.Length;
+                Editor.IndentLines(Editor.Selection, indentWidth);
+            }
+            else if (shiftDown || string.IsNullOrWhiteSpace(lineStart))
+            {
+                Editor.PushUndoState(false);
+                Editor.IndentLine(CaretLine, indentWidth);
             }
             else
             {

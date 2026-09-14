@@ -412,6 +412,43 @@ public class Editor
         _isCodeChanged = true;
     }
 
+    public void IndentLine(int line, int indentAmount)
+    {
+        IndentLines(new TextRange(new TextPosition(line, 0), new TextPosition(line, Lines[line].Length)), indentAmount);
+    }
+
+    public void IndentLines(TextRange range, int indentAmount)
+    {
+        var startLine = range.Start.Line;
+        var endLine = range.End.Line;
+
+        if (IsReadOnly || startLine < 0 || endLine >= Lines.Count || startLine > endLine || indentAmount == 0)
+            return;
+
+        for (int i = startLine; i <= endLine; i++)
+        {
+            if (i == endLine && range.End.Col == 0)
+                break;
+            string line = Lines[i].Text;
+            int shift = indentAmount;
+            if (indentAmount > 0)
+                line = new string(' ', indentAmount) + line;
+            else
+            {
+                var firstNonSpaceIndex = line.TakeWhile(c => c == ' ').Count();
+                shift = Math.Max(indentAmount, -firstNonSpaceIndex);
+                line = line.Substring(-shift);
+            }
+            ReplaceLine(i, line);
+            if (i == CaretLine)
+                CaretCol += shift;
+            if (i == Selection.Start.Line)
+                Selection.Start.Col += shift;
+            if (i == Selection.End.Line)
+                Selection.End.Col += shift;
+        }
+    }
+
     public bool IsWordBeginning(TextPosition pos)
     {
         if (pos.Col == 0)
