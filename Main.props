@@ -3,11 +3,11 @@
   <PropertyGroup>
     <AssemblyName>IC10Editor</AssemblyName>
     <Description>Alternative IC10 Editor for Stationeers based on ImGui</Description>
-    <!-- Optional: Set this if it's not found automatically or you want to force a specific Stationeers directory -->
-    <StationeersDirectory/>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.IO.Compression" Version="4.3.0" />
     <PackageReference Include="System.IO.Compression.ZipFile" Version="4.3.0" />
   </ItemGroup>
+  <!-- Optional: Set 'StationeersDirectory' inside 'User.props' if it's not found automatically or you want to force a specific Stationeers directory -->
+  <Import Condition="Exists('User.props')" Project="User.props" />
 </Project>

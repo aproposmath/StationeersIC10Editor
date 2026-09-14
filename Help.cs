@@ -167,6 +167,7 @@ public static class HelpWindow
             "Auto Completion (insert with Tab key)",
             IC10EditorPlugin.EnableAutoComplete
         );
+        Config.Int("Indent Width", IC10EditorPlugin.IndentWidth);
         Config.Bool("Relative line numbers", IC10EditorPlugin.RelativeLineNumbers);
         Config.Bool("Apply patch to keep selected IC10 in computer (Experimental)", IC10EditorPlugin.RestoreSelectedHousing);
         Config.Char("Path Separator", IC10EditorPlugin.PathSeparator);
