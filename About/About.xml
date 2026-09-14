@@ -4,7 +4,7 @@
   <Author>aproposmath</Author>
   <ModID>com.github.aproposmath.StationeersIC10Editor</ModID>
   <WorkshopHandle>3592775931</WorkshopHandle>
-  <Version>0.9.100</Version>
+  <Version>0.9.101</Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
 
@@ -34,11 +34,9 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        0.9.100:
+        0.9.101:
         
-        Fixes:
-        - Fix race condition in Fossil VCS interface when deleting files, thx @BlackFranky
-        - Fix broken parser when other mods add unnamed enum values (instructions, logic types), thx @WreckerRecreation
+        - Unindent on shift+tab, configurable indent width (huge thx @glektarssza)
 
   </ChangeLog>
   <Tags>
