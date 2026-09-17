@@ -183,6 +183,24 @@
         "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/v0.9.3/IC10Editor-v0.9.3.zip",
         "version": "0.9.3"
     },
+    "sha256:7d1eec383cf93e078aac8849ad1697722b6a0f097c25a70f7dd6b13ebbe0bc7d": {
+        "author": "aproposmath",
+        "branch": [],
+        "depends_on": [],
+        "digest": "sha256:7d1eec383cf93e078aac8849ad1697722b6a0f097c25a70f7dd6b13ebbe0bc7d",
+        "id": "com.github.aproposmath.StationeersIC10Editor",
+        "name": "IC10 Editor",
+        "tag": [
+            "IC10",
+            "Editor",
+            "Code",
+            "BepInEx",
+            "VIM",
+            "StationeersLaunchPad"
+        ],
+        "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/v0.9.101/IC10Editor-v0.9.101.zip",
+        "version": "0.9.101"
+    },
     "sha256:857c6d7f627ebfba99c5bf1de4e86578e244704d9d58c115639cbe0668a7338c": {
         "author": "aproposmath",
         "branch": [],
