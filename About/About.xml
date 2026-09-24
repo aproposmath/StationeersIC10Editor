@@ -34,10 +34,9 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        0.9.101:
+        0.9.102:
         
-        - Unindent on shift+tab, configurable indent width (huge thx @glektarssza)
-        - (Possibly) fix several version control bugs (thx @Zurku, @Largely Unemployed, @George, @Trekki for reporting, especially the stack trace by @George was super helpful)
+        - Fix tab key handling on empty lines (thx @VFox32)
 
   </ChangeLog>
   <Tags>

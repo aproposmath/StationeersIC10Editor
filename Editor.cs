@@ -427,7 +427,7 @@ public class Editor
 
         for (int i = startLine; i <= endLine; i++)
         {
-            if (i == endLine && range.End.Col == 0)
+            if (i == endLine && i > startLine && range.End.Col == 0)
                 break;
             string line = Lines[i].Text;
             int shift = indentAmount;
