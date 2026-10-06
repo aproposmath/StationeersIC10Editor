@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Linq;
 
 using Assets.Scripts;
+using Assets.Scripts.GridSystem;
 using Assets.Scripts.Objects.Motherboards;
 using Assets.Scripts.UI;
 
@@ -1383,6 +1384,10 @@ public class EditorWindow
     }
 
     public EditorTab MotherboardTab => Tabs[0];
+
+    public bool IsStale =>
+        GameManager.GameState != GameState.Running
+        || (MotherboardTab[0].Target is ProgrammableChipMotherboard pcm && pcm == null);
 
     public List<StyledLine> Lines => ActiveEditor.Lines;
     public string Code => ActiveEditor.Code;

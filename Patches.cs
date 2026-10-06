@@ -35,6 +35,17 @@ public static class IC10EditorPatches
         EditorData = new ConditionalWeakTable<ProgrammableChipMotherboard, EditorWindow>();
     }
 
+    private static void RemoveStaleEditors()
+    {
+        var pcm = InputSourceCode.Instance.PCM;
+        foreach (var editor in AllEditors.FindAll(e => e.IsStale))
+        {
+            editor.HideWindow();
+            AllEditors.Remove(editor);
+        }
+        InputSourceCode.Instance.PCM = pcm;
+    }
+
     private static EditorWindow GetEditor(ProgrammableChipMotherboard isc)
     {
         EditorWindow editor;
@@ -56,6 +67,7 @@ public static class IC10EditorPatches
     )
     {
         EditorWindow.UseNativeEditor = false;
+        RemoveStaleEditors();
         var editor = GetEditor(InputSourceCode.Instance.PCM);
         editor.SetTitle(title);
         if (editor.MotherboardTab[0].Code != defaultText)
@@ -73,6 +85,7 @@ public static class IC10EditorPatches
         {
             // using var memUsage = ScopedMemoryTracker.Track();
             Settings.Update();
+            RemoveStaleEditors();
             foreach (var editor in AllEditors)
                 editor.Draw();
         }
