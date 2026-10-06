@@ -998,8 +998,6 @@ public static class LibraryWindow
 
         IsOpen = true;
         _hasWindowJustOpened = true;
-
-        ImGui.OpenPopup("Library Search");
     }
 
     public static void Search()

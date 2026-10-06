@@ -21,7 +21,6 @@ using static Utils;
 
 public class ConfirmWindow
 {
-    public static int NumWindowsOpen = 0;
     public string Title;
     public string Message;
     public bool IsOpen = true;
@@ -39,22 +38,18 @@ public class ConfirmWindow
         InputPrompt = inputPrompt;
         UserInput = "";
         _justOpened = true;
-        NumWindowsOpen++;
     }
 
     public void Close()
     {
         IsOpen = false;
         ImGui.CloseCurrentPopup();
-        NumWindowsOpen--;
     }
 
     public void Confirm()
     {
+        Close();
         OnConfirm?.Invoke();
-        IsOpen = false;
-        ImGui.CloseCurrentPopup();
-        NumWindowsOpen--;
     }
 
     public void Draw()
@@ -1754,7 +1749,7 @@ public class EditorWindow
     private bool _hasFocus = false;
 
     // public bool HasFocus => _hasFocus && !LibrariesWindow.IsOpen && !(ActiveEditor._confirmWindow?.IsOpen ?? false) && !(ActiveTab.VersionWindow?.IsOpen ?? false);
-    public bool HasFocus => _hasFocus && ConfirmWindow.NumWindowsOpen == 0;
+    public bool HasFocus => _hasFocus && !ImGui.IsPopupOpen("", ImGuiPopupFlags.AnyPopupId | ImGuiPopupFlags.AnyPopupLevel);
 
     public void Draw()
     {
