@@ -277,8 +277,9 @@ public class IC10CodeFormatter : StaticFormatter
                     }
                     else if (line.IsBatchInstruction && argIndex == line.DeviceHashArgumentIndex)
                     {
-                        string h = line[i].Text;
-                        if (IC10Utils.GetLogicablePrefabName(h) == null)
+                        string h = IsDefinedValue(txt, out var value) ? value : txt;
+                        bool isLiteral = IC10Utils.IsHashExpression(h) || IC10Utils.TryParseNumber(h, out _);
+                        if (isLiteral && IC10Utils.GetLogicablePrefabName(h) == null)
                         {
                             error = $"Invalid device hash {h}";
                             dt = DataType.Unknown;
