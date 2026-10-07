@@ -1464,6 +1464,7 @@ public class EditorWindow
             return;
 
         Show = false;
+        IC10.IC10CodeFormatter.CloseEgg();
         KeyManager.RemoveInputState("ic10editorinputstate");
         if (InputWindow.InputState == InputPanelState.Waiting)
             InputWindow.CancelInput();

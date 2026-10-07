@@ -46,6 +46,52 @@ public class IC10CodeFormatter : StaticFormatter
 
     public ICodeFormatter MinifyFormatter => MinifyEditor.CodeFormatter;
 
+    private static Egg _egg = null;
+    private bool _eggPending = false;
+
+    // Constructed on draw, when all lines are parsed. Read-only views (minify) reparse on every
+    // change and must not replace an open egg.
+    private void StartEgg()
+    {
+        if ((Editor?.IsReadOnly ?? false) || (_egg?.IsOpen ?? false))
+            return;
+        try
+        {
+            _egg = new Egg(Lines);
+        }
+        catch (Exception e)
+        {
+            L.Error($"Egg failed to start: {e}");
+            _egg = null;
+        }
+    }
+
+    public static void CloseEgg()
+    {
+        _egg?.Close();
+        _egg = null;
+    }
+
+    private void DrawEgg()
+    {
+        if (_eggPending)
+        {
+            _eggPending = false;
+            StartEgg();
+        }
+        if (_egg == null)
+            return;
+        try
+        {
+            _egg.Draw();
+        }
+        catch (Exception e)
+        {
+            L.Error($"Egg failed, closing: {e}");
+            CloseEgg();
+        }
+    }
+
     public static double MatchingScore(string input)
     {
         // Simple heuristic: count occurrences of IC10-specific keywords
@@ -179,11 +225,35 @@ public class IC10CodeFormatter : StaticFormatter
         return startIndex;
     }
 
+    private bool CheckEgg(string text)
+    {
+        text = text.Trim();
+        if (text.Length < 12)
+            return false;
+        text = text.ToLower();
+        byte[] s = [0x74, 0x17, 0x97, 0xe, 0xdc, 0x12, 0x89, 0x59, 0x9e, 0x1e, 0x98, 0x10];
+        var index = 0;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = (byte)text[i];
+            var n = (byte)(index * 0x7F);
+            if ((c ^ n) == s[index])
+                index++;
+            else
+                index = 0;
+            if (index == s.Length)
+                return true;
+        }
+        return false;
+    }
+
     public override StyledLine ParseLine(string text)
     {
         var line = TParseLine<IC10Line>(text);
 
         IdentifyTypesAndAddTokens(line);
+        if (line.IsInstruction && line[0].Text == "hcf" && CheckEgg(text))
+            _eggPending = true;
         return line;
     }
 
@@ -823,6 +893,8 @@ public class IC10CodeFormatter : StaticFormatter
         }
         ImGui.SameLine();
         ImGuiUtils.Checkbox("Registers", ref _showRegisterUsage, "Show register usage");
+
+        DrawEgg();
     }
 
     public static string[] _registerNames = new string[]

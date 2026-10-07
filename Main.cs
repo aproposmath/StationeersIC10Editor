@@ -31,6 +31,8 @@ public class IC10EditorPlugin : BaseUnityPlugin
     public static ConfigEntry<bool> RestoreSelectedHousing;
     public static ConfigEntry<string> PathSeparator;
     public static ConfigEntry<bool> Minify;
+    public static ConfigEntry<int> Highscore;
+    public static ConfigEntry<string> EggData;
 
     public static Dictionary<string, ConfigEntry<string>> Colors = new();
     public static IC10EditorPlugin Instance { get; private set; }
@@ -146,7 +148,6 @@ public class IC10EditorPlugin : BaseUnityPlugin
             "|",
             "Path separator character to manage folders without changing the file location on disk\nOnly change this if you need to and really know what you are doing\nThis does NOT rename scripts automatically to reflect the path separator change"
         );
-
         foreach (var kv in ColorDefaults)
         {
             Colors[kv.Key] = Config.Bind(
@@ -233,8 +234,28 @@ public class IC10EditorPlugin : BaseUnityPlugin
         }
     }
 
+    // Bound on first use, so the entries only show up once the egg was found
+    public static void BindEggConfig()
+    {
+        if (EggData != null)
+            return;
+        Highscore = Instance.Config.Bind(
+            "General",
+            "Highscore",
+            0,
+            "Your current highscore (don't touch this, this is fine)"
+        );
+        EggData = Instance.Config.Bind(
+            "General",
+            "egg",
+            "",
+            "This is fine."
+        );
+    }
+
     private void OnDestroy()
     {
+        EggAudio.Shutdown();
 #if DEBUG
         if (!ModUtils.IsLoadedByScriptEngine(typeof(IC10EditorPlugin)))
             return;

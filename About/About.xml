@@ -4,7 +4,7 @@
   <Author>aproposmath</Author>
   <ModID>com.github.aproposmath.StationeersIC10Editor</ModID>
   <WorkshopHandle>3592775931</WorkshopHandle>
-  <Version>0.9.102</Version>
+  <Version>1.0.0</Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
 
@@ -34,12 +34,13 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        0.9.102:
+        1.0.0:
         
         - Fix tab key handling on empty lines (thx @VFox32)
         - Fix editor ignoring mouse/keyboard input after closing a dialog with the x button (thx @SmallYearOldFetus)
         - Fix stuck editor window and disabled inputs after disconnecting from a multiplayer server (thx @RA2lover)
         - Fix wrong error highlighting for registers and defines as device hash in lb/sb/lbn/sbn (thx @RA2lover)
+        - Hidden Easter egg for those who like to play with fire (this is fine).
 
   </ChangeLog>
   <Tags>
