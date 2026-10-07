@@ -55,26 +55,6 @@
         "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/debug/IC10Editor-debug.zip",
         "version": "0.9.9.7-dev"
     },
-    "sha256:1e89df9d1b9dff68b7b51d497af51598a770c8b12e8d9f10db4456761bd5d710": {
-        "author": "aproposmath",
-        "branch": [
-            "main"
-        ],
-        "depends_on": [],
-        "digest": "sha256:1e89df9d1b9dff68b7b51d497af51598a770c8b12e8d9f10db4456761bd5d710",
-        "id": "com.github.aproposmath.StationeersIC10Editor",
-        "name": "IC10 Editor",
-        "tag": [
-            "IC10",
-            "Editor",
-            "Code",
-            "BepInEx",
-            "VIM",
-            "StationeersLaunchPad"
-        ],
-        "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/main/IC10Editor-main.zip",
-        "version": "0.9.101.5-dev"
-    },
     "sha256:1fdf6a5e2191ae3f06be298323036419bab5145dcd9ebb722992b2aacdc9ecf7": {
         "author": "aproposmath",
         "branch": [],
@@ -274,6 +254,26 @@
         ],
         "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/v0.8.8/IC10Editor-v0.8.8.zip",
         "version": "0.8.8"
+    },
+    "sha256:a7017597f0772fea50af4f25ed5fb3ad8d42179e152fe0100f279cc676d9f7e9": {
+        "author": "aproposmath",
+        "branch": [
+            "main"
+        ],
+        "depends_on": [],
+        "digest": "sha256:a7017597f0772fea50af4f25ed5fb3ad8d42179e152fe0100f279cc676d9f7e9",
+        "id": "com.github.aproposmath.StationeersIC10Editor",
+        "name": "IC10 Editor",
+        "tag": [
+            "IC10",
+            "Editor",
+            "Code",
+            "BepInEx",
+            "VIM",
+            "StationeersLaunchPad"
+        ],
+        "url": "https://github.com/aproposmath/StationeersIC10Editor/releases/download/main/IC10Editor-main.zip",
+        "version": "1.0.0"
     },
     "sha256:acaa7f1f383e441eae7526be814bb2d98477a4df5c0d13a58aa0b9b5cb673f51": {
         "author": "aproposmath",
