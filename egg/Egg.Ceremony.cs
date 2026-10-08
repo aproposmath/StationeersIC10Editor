@@ -38,23 +38,25 @@ public partial class Egg
     const double BoardingStep = 1.0;
     const double BoardingTravel = 1.8;
     const double LaunchDuration = 12.0;
-    // Aimee stays stuck through boarding and only catches the rocket after lift-off.
+    // Aimee stays stuck through boarding; after lift-off she teleports onto the rocket's nose.
     const double AimeeUnstick = 1.4;
-    const double AimeeRun = 0.8;
-    const double AimeeLeap = 0.9;
+    const double AimeeTeleport = 2.6;
     // Fraction of the way to the hatch where Aimee gets stuck during boarding.
     const float AimeeStuckAt = 0.55f;
     const double FallbackPartyLength = 20.0;
+    const float PartyMusicVolume = 1.2f;
+    // The party ends (boarding starts) after this at the latest, even if the song is longer.
+    const double MaxPartyLength = 90.0;
     // Credits: Aimee hangs on this long before she drifts off.
     const double AimeeLetGo = 60.0;
     const float GuestX = 2.6f;
     const float GuestY = 21.8f;
-    const double BubbleDuration = 5.0;
-    const double BubbleMinGap = 4.0;
-    const double BubbleMaxGap = 9.0;
+    const double BubbleDuration = 7.0;
+    const double BubbleMinGap = 2.0;
+    const double BubbleMaxGap = 5.0;
     const float BoothTop = 4.5f;
     const float RocketX = 34.5f;
-    const float RocketBaseY = 23.5f;
+    const float RocketBaseY = 25.5f;
     const float RocketPartHeight = 3.2f;
     const float RocketPartWidth = 4.6f;
     const int RocketPartCount = 5;
@@ -141,14 +143,14 @@ public partial class Egg
     Texture2D Skull;
 
     double PhaseTime => CTime - PhaseStart;
-    double PartyLength => PartyTrack != null ? PartySongInfo.Length : FallbackPartyLength;
+    double PartyLength => Math.Min(MaxPartyLength, PartyTrack != null ? PartySongInfo.Length : FallbackPartyLength);
     // The rocket is complete when boarding starts, so everybody is inside when the song ends.
     double BuildLength => Math.Max(5.0, PartyLength - BoardingDuration);
     double PartyProgress => PartyStartVirtual >= 0 ? Math.Min(1.0, (CTime - PartyStartVirtual) / BuildLength) : 0.0;
     double PartyRemaining => Math.Max(0.0, PartyLength - (PartyStartVirtual >= 0 ? CTime - PartyStartVirtual : 0.0));
 
     // Visual beat phase correction in beats (tune with the debug slider, then hardcode).
-    public static float BeatShift = 0.0f;
+    public static float BeatShift = 0.5f;
 
     // Beat follows the audio clock of the track, not the frame clock.
     double Beat => PartyTrack != null && PartyStartVirtual >= 0
@@ -159,9 +161,8 @@ public partial class Egg
 
     public void StartCeremony()
     {
-        Luna = Thumbnail("ToyLuna", Helmet);
-        IcarusSuit = Thumbnail("ItemIcarusSuit", Helmet);
-        Skull = Thumbnail("HumanSkull", Helmet);
+        Luna = Thumbnail("ToyLuna");
+        IcarusSuit = Thumbnail("ItemIcarusSuit");
 
         EggAudio.StopAll();
         EggMusic.Stop();
@@ -201,6 +202,7 @@ public partial class Egg
             if (track == null)
                 continue;
             PartyTrack = track;
+            PartyTrack.Volume = PartyMusicVolume;
             PartySongInfo = song;
             break;
         }
@@ -246,6 +248,7 @@ public partial class Egg
                 Exhaust.Clear();
                 LastExhaustTime = CTime;
                 GenerateCreditsStars();
+                ResetFinale();
                 if (EggMusic.SpaceMusic != null && EggMusic.Current != EggMusic.SpaceMusic)
                     EggMusic.Play(EggMusic.SpaceMusic);
                 break;
@@ -261,6 +264,7 @@ public partial class Egg
             EggStore.Save();
             EngineVoice?.Stop();
             EngineStartVoice?.Stop();
+            EggAudio.StopAll();
             Exhaust.Clear();
             StartNewGame(InitialCode);
         }
@@ -305,8 +309,10 @@ public partial class Egg
                     SetPhase(CeremonyPhase.Launch);
                 break;
             case CeremonyPhase.Credits:
-                UpdateExhaust(new Vector2(CreditsRocketX + CreditsSway(), CreditsRocketBaseY + 0.1f));
-                if (!AimeeLetGoShown && PhaseTime >= AimeeLetGo && AimeeIndex >= 0)
+                UpdateFinale();
+                if (!FinaleExploded)
+                    UpdateExhaust(new Vector2(CreditsRocketX + CreditsSway(), CreditsRocketBaseY + 0.1f));
+                if (!AimeeLetGoShown && PhaseTime >= AimeeLetGo && AimeeIndex >= 0 && !FinaleExploded)
                 {
                     AimeeLetGoShown = true;
                     ShowBubble(AimeeIndex, EggText.AimeeLetGo);
@@ -335,45 +341,28 @@ public partial class Egg
         return Vector2.Lerp(start, Hatch, AimeeStuckAt);
     }
 
-    // Where Aimee hangs on once she caught the rocket: side of the upper fuselage segment.
+    // Where Aimee sits once she teleported onto the rocket: the nose of the crew module (feet position).
     Vector2 AimeeAttachPoint(double launchTime) =>
-        new(RocketX - RocketPartWidth * 0.5f - 0.3f, RocketBaseY - 3 * RocketPartHeight - Rise(launchTime) + 0.8f);
+        new(RocketX, RocketBaseY - RocketPartCount * RocketPartHeight - Rise(launchTime) + 0.2f);
 
+    // Like her in-game stuck routine: wiggle, then she is suddenly somewhere else (on the rocket).
     void GetAimeeLaunchPose(double t, out Vector2 position, out int facing, out float jump)
     {
         var stuck = AimeeStuckPosition();
-        var pad = new Vector2(RocketX - RocketPartWidth * 0.5f - 1.2f, RocketBaseY);
         facing = 0;
         jump = 0f;
 
-        if (t < AimeeUnstick)
+        if (t < AimeeTeleport)
         {
             position = stuck + new Vector2(Mathf.Sin((float)t * 25f) * 0.15f, 0);
             facing = (int)(t / 0.15) % 2 == 0 ? 0 : 2;
             return;
         }
 
-        var run = t - AimeeUnstick;
-        if (run < AimeeRun)
-        {
-            var u = (float)(run / AimeeRun);
-            position = Vector2.Lerp(stuck, pad, u);
-            jump = Mathf.Abs(Mathf.Sin(u * Mathf.PI * 4f)) * 0.35f;
-            return;
-        }
-
-        var leap = (run - AimeeRun) / AimeeLeap;
-        if (leap < 1.0)
-        {
-            var landing = AimeeAttachPoint(AimeeUnstick + AimeeRun + AimeeLeap);
-            var j = (float)leap;
-            position = Vector2.Lerp(pad, landing, SmootherStep(j));
-            jump = Mathf.Sin(j * Mathf.PI) * 3.5f;
-            return;
-        }
-
+        facing = (int)((t - AimeeTeleport) / 0.4) % 2 == 0 ? 0 : 2;
         position = AimeeAttachPoint(t) + new Vector2(Mathf.Sin((float)t * 9f) * 0.08f, 0);
     }
+
 
     public void DrawCeremony()
     {
@@ -416,8 +405,12 @@ public partial class Egg
 
         DrawToasts(canvas.Point(20.0f, 12.5f));
 
-        var hint = Phase == CeremonyPhase.Credits ? EggText.HintClose : Phase == CeremonyPhase.Announce ? EggText.HintContinue : EggText.HintSkip;
-        ImGui.GetWindowDrawList().AddText(canvas.Point(0.5f, canvas.Height - 1.0f), ColorWithAlpha(180, 190, 210, 220), hint);
+        // no hint during the credits, the ending should not be spoiled
+        if (Phase != CeremonyPhase.Credits)
+        {
+            var hint = Phase == CeremonyPhase.Announce ? EggText.HintContinue : EggText.HintSkip;
+            ImGui.GetWindowDrawList().AddText(canvas.Point(0.5f, canvas.Height - 1.0f), ColorWithAlpha(180, 190, 210, 220), hint);
+        }
 
         ImGui.EndChild();
     }
@@ -434,6 +427,8 @@ public partial class Egg
 
     Vector2 LaunchShake(float unit)
     {
+        if (!EggStore.State.ScreenShake)
+            return Vector2.zero;
         var t = (float)PhaseTime;
         var fade = 1f - Mathf.Clamp01(t / (float)LaunchDuration);
         var amp = 0.25f * unit * fade;
@@ -872,11 +867,11 @@ public partial class Egg
 
     float CreditsSway() => Mathf.Sin((float)PhaseTime * 0.7f) * 0.4f;
 
-    // Aimee clings to the upper fuselage, then loses her grip and tumbles away slowly.
-    // Sprite center of Aimee in the credits: clinging to the fuselage, later drifting away.
+    // Sprite center of Aimee in the credits: sitting on the nose (the credits rocket has no launch mount,
+    // so the top part is RocketPartCount - 1 segments above the base), later drifting away.
     Vector2 CreditsAimeeCenter(float rocketX, float t)
     {
-        var attach = new Vector2(rocketX - RocketPartWidth * 0.5f - 0.3f, CreditsRocketBaseY - 2 * RocketPartHeight + 0.8f - CrewSize * 0.5f);
+        var attach = new Vector2(rocketX, CreditsRocketBaseY - (RocketPartCount - 1) * RocketPartHeight + 0.2f - CrewSize * 0.5f);
         if (t < AimeeLetGo)
             return attach + new Vector2(Mathf.Sin(t * 9f) * 0.08f, 0);
         var drift = (float)(t - AimeeLetGo);
@@ -937,6 +932,7 @@ public partial class Egg
     {
         if (speaker == SpeakerIcarus) return new Vector2(GuestX, GuestY - 3.2f - 1.9f);
         if (speaker == SpeakerLuna) return LunaHome + new Vector2(0, -1.7f);
+        if (speaker == SpeakerChip || speaker == SpeakerNo || speaker == SpeakerSurvivor) return FinaleBubbleAnchor(speaker);
         // the DJ's head touches the top edge, so his bubble hangs off the right side of it
         if (CrewNames[speaker] == EggText.DjName) return new Vector2(23.5f, BoothTop - 2.3f);
         Vector2 pos;
@@ -964,8 +960,8 @@ public partial class Egg
         var age = CTime - BubbleStart;
         if (age < 0 || age > BubbleDuration || string.IsNullOrEmpty(BubbleText))
             return;
-        // after lift-off only Aimee is still outside
-        if (Phase >= CeremonyPhase.Launch && BubbleSpeaker != AimeeIndex)
+        // after lift-off only Aimee is still outside (plus the finale voices from inside the rocket)
+        if (Phase >= CeremonyPhase.Launch && BubbleSpeaker != AimeeIndex && BubbleSpeaker > SpeakerLuna)
             return;
         var fade = (float)Math.Min(1.0, Math.Min(age / 0.25, (BubbleDuration - age) / 0.4));
         var alpha = (byte)(255 * fade);
@@ -1003,6 +999,13 @@ public partial class Egg
     // The rocket climbs through a star stream while the acknowledgements scroll down beside it.
     void DrawCredits(CeremonyCanvas canvas)
     {
+        if (FinaleTime >= FinaleFallAt)
+        {
+            DrawFinaleLanding(canvas);
+            DrawSpeechBubble(canvas);
+            return;
+        }
+
         var draw = ImGui.GetWindowDrawList();
         var font = ImGui.GetIO().Fonts.Fonts[0];
         var t = (float)PhaseTime;
@@ -1018,17 +1021,23 @@ public partial class Egg
         }
 
         var rc = new CeremonyCanvas(canvas.Origin, canvas.Unit * CreditsRocketScale, height / CreditsRocketScale);
-        DrawExhaust(rc);
-        var sway = CreditsSway();
-        for (var i = 1; i < RocketParts.Count; i++)
+        if (FinaleExploded)
+            DrawFinaleDebris(rc, canvas);
+        else
         {
-            var bottom = CreditsRocketBaseY - (i - 1) * RocketPartHeight;
-            DrawRocketPart(i, rc.Point(CreditsRocketX + sway, bottom - RocketPartWidth * 0.5f), RocketPartWidth * rc.Unit, sway * 0.08f);
+            DrawExhaust(rc);
+            var sway = CreditsSway();
+            for (var i = 1; i < RocketParts.Count; i++)
+            {
+                var bottom = CreditsRocketBaseY - (i - 1) * RocketPartHeight;
+                DrawRocketPart(i, rc.Point(CreditsRocketX + sway, bottom - RocketPartWidth * 0.5f), RocketPartWidth * rc.Unit, sway * 0.08f);
+            }
+            // part 1 sits at the launch base position of part 0, so the base line is one part higher
+            DrawPortholes(rc, CreditsRocketX + sway, CreditsRocketBaseY + RocketPartHeight, 0f);
+            DrawCreditsAimee(rc, CreditsRocketX + sway, t);
         }
-        // part 1 sits at the launch base position of part 0, so the base line is one part higher
-        DrawPortholes(rc, CreditsRocketX + sway, CreditsRocketBaseY + RocketPartHeight, 0f);
-        DrawCreditsAimee(rc, CreditsRocketX + sway, t);
         DrawSpeechBubble(canvas);
+        DrawFinaleNote(canvas);
 
         var header = ColorWithAlpha(255, 225, 105, 255);
         var body = header;
@@ -1044,12 +1053,11 @@ public partial class Egg
         foreach (var line in EggText.CreditsLines)
             lines.Add((line, body, 36f));
 
-        const float lineStep = 1.6f;
         // scrolls through once until the last line has left the screen, no wrap around
-        var scroll = Math.Min(t * CreditsScrollSpeed, lines.Count * lineStep + height + 2f);
+        var scroll = Math.Min(t * CreditsScrollSpeed, lines.Count * CreditsLineStep + height + 2f);
         for (var i = 0; i < lines.Count; i++)
         {
-            var y = height + 1f - scroll + i * lineStep;
+            var y = height + 1f - scroll + i * CreditsLineStep;
             if (y < -1f || y > height)
                 continue;
             var scale = lines[i].Size / ImGui.GetFontSize();
@@ -1060,11 +1068,11 @@ public partial class Egg
         }
     }
 
-    void DrawCeremonyCharacter(CeremonyCanvas canvas, Texture2D texture, float x, float y, float size, int facing, float jump)
+    void DrawCeremonyCharacter(CeremonyCanvas canvas, Texture2D texture, float x, float y, float size, int facing, float jump, uint tint = 0xFFFFFFFF)
     {
         var pixelSize = size * canvas.Unit;
         var pos = canvas.Point(x - size * 0.5f, y - size - jump);
-        DrawSprite(texture, pos, pixelSize, facing);
+        DrawSprite(texture, pos, pixelSize, facing, tint);
     }
 
     void DrawRotatedCeremonySprite(Texture2D texture, Vector2 center, float size, float rotation, uint tint = 0xFFFFFFFF)

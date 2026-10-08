@@ -34,13 +34,9 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        1.0.0:
+        1.0.1:
         
-        - Fix tab key handling on empty lines (thx @VFox32)
-        - Fix editor ignoring mouse/keyboard input after closing a dialog with the x button (thx @SmallYearOldFetus)
-        - Fix stuck editor window and disabled inputs after disconnecting from a multiplayer server (thx @RA2lover)
-        - Fix wrong error highlighting for registers and defines as device hash in lb/sb/lbn/sbn (thx @RA2lover)
-        - Hidden Easter egg for those who like to play with fire (this is fine).
+        - Easter egg improvements (thx @JacksonTheMaster and @VFox32)
 
   </ChangeLog>
   <Tags>

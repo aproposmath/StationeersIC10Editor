@@ -32,13 +32,28 @@ public partial class Egg
     // Vertical center of the flight scene in canvas units (set from the canvas each frame).
     float IntroMidY = 15f;
 
-    void StartIntro()
+    // The automatic intro on egg start honours the skip setting; the menu button always plays it.
+    bool IntroManual;
+    bool IntroSkipped => EggStore.State.SkipIntro && !IntroManual;
+
+    void StartIntro(bool manual = false)
     {
+        IntroManual = manual;
         GameMode = IntroMode;
         Intro = IntroStage.Flight;
         IntroStageStart = LastIntroTime = ImGui.GetTime();
         IntroParticles.Clear();
-        IntroEngine = EggAudio.Play(EggAudio.FindByName("ShuttleSmall", "MainEngine", "LP") ?? EggAudio.FindByName("ShuttleSmall", "Engine"), 0.5f);
+        if (!IntroSkipped)
+            IntroEngine = EggAudio.Play(EggAudio.FindByName("ShuttleSmall", "MainEngine", "LP") ?? EggAudio.FindByName("ShuttleSmall", "Engine"), 0.5f);
+    }
+
+    // Shown instead of the intro while the assets load, when the intro is skipped.
+    void DrawLoadingScreen()
+    {
+        var vp = ImGui.GetMainViewport();
+        var text = string.Format(EggText.IntroLoading, EggAssets.Status);
+        var size = ImGui.CalcTextSize(text);
+        ImGui.GetWindowDrawList().AddText(vp.Pos + (vp.Size - size) * 0.5f, ColorWithAlpha(180, 190, 210, 220), text);
     }
 
     void EndIntro()
@@ -229,9 +244,27 @@ public partial class Egg
 
     void DrawAlone(CeremonyCanvas canvas)
     {
-        var draw = ImGui.GetWindowDrawList();
         var t = (float)IntroTime;
+        var ground = DrawCrashSite(canvas, t);
 
+        // the stationeer, shivering
+        var shiver = Mathf.Sin(t * 38f) * 0.07f;
+        DrawCeremonyCharacter(canvas, Helmet, 20.0f + shiver, ground, 3.6f, 0, 0f);
+
+        var shown = Math.Min(EggText.IntroLines.Length, (int)(t / IntroLineInterval) + 1);
+        for (var i = 0; i < shown; i++)
+        {
+            var age = t - i * (float)IntroLineInterval;
+            var alpha = (byte)(255 * Mathf.Clamp01(age / 0.6f));
+            var color = i == shown - 1 ? ColorWithAlpha(255, 240, 200, alpha) : ColorWithAlpha(160, 160, 175, alpha);
+            DrawCenteredText(canvas, EggText.IntroLines[i], canvas.Height * 0.17f + i * 1.3f, color, 0.85f * canvas.Unit);
+        }
+    }
+
+    // Night sky, ground and the smouldering wreckage of the first rocket; returns the ground line.
+    float DrawCrashSite(CeremonyCanvas canvas, float t)
+    {
+        var draw = ImGui.GetWindowDrawList();
         var ground = canvas.Height * 2f / 3f;
         draw.AddRectFilled(canvas.Point(0, 0), canvas.Point(40, canvas.Height), ColorWithAlpha(10, 8, 20, 255));
         for (var i = 0; i < 60; i++)
@@ -250,18 +283,6 @@ public partial class Egg
                 DrawRocketPart(part, canvas.Point(x, ground + dy), 2.6f * canvas.Unit, rotation);
         var smoke = Mathf.Max(0f, Mathf.Sin(t * 0.8f));
         draw.AddCircleFilled(canvas.Point(27.0f + Mathf.Sin(t) * 0.3f, ground - 2.5f - t % 3f), (0.6f + 0.2f * smoke) * canvas.Unit, ColorWithAlpha(90, 90, 95, (byte)(90 * (1f - t % 3f / 3f))), 12);
-
-        // the stationeer, shivering
-        var shiver = Mathf.Sin(t * 38f) * 0.07f;
-        DrawCeremonyCharacter(canvas, Helmet, 20.0f + shiver, ground, 3.6f, 0, 0f);
-
-        var shown = Math.Min(EggText.IntroLines.Length, (int)(t / IntroLineInterval) + 1);
-        for (var i = 0; i < shown; i++)
-        {
-            var age = t - i * (float)IntroLineInterval;
-            var alpha = (byte)(255 * Mathf.Clamp01(age / 0.6f));
-            var color = i == shown - 1 ? ColorWithAlpha(255, 240, 200, alpha) : ColorWithAlpha(160, 160, 175, alpha);
-            DrawCenteredText(canvas, EggText.IntroLines[i], canvas.Height * 0.17f + i * 1.3f, color, 0.85f * canvas.Unit);
-        }
+        return ground;
     }
 }

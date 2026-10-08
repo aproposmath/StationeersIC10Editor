@@ -23,6 +23,11 @@ public class EggState
     public int UnlockedCharacters = 1;
     // The launch ceremony was watched to the end; progress is kept, the party stays available from the menu.
     public bool CeremonySeen;
+    // Settings menu
+    public float SoundVolume = 1f;
+    public float MusicVolume = 1f;
+    public bool SkipIntro;
+    public bool ScreenShake = true;
 }
 
 // Persistent egg state: JSON, xor-scrambled, base64, stored in the "egg" config entry.
@@ -88,6 +93,7 @@ public partial class Egg
 {
     const string AchievementTurboBoost = "TurboBoost";
     const string AchievementCleanSweep = "CleanSweep";
+    const string AchievementHcf = "Hcf";
     const string AchievementFan = "Fan";
     const string AchievementSuperFan = "SuperFan";
     const string AchievementRocketBuilder = "RocketBuilder";
@@ -102,6 +108,8 @@ public partial class Egg
     HashSet<string> NewAchievements = [];
     readonly HashSet<int> NewCharacters = [];
     int UnlockedSeen = -1;
+    // Character unlocked by the score of the current game, shown on the game over screen.
+    int UnlockedCharacterThisGame = -1;
 
     public static int CharactersUnlockedByScore(int score) => CharacterRequiredScore.Count(required => score >= required);
 
@@ -112,7 +120,30 @@ public partial class Egg
             EggStore.State.Highscore = total;
         var next = EggStore.State.UnlockedCharacters;
         if (next < CharacterRequiredScore.Length && selectedCharacter == next - 1 && total >= CharacterRequiredScore[next])
+        {
             EggStore.State.UnlockedCharacters = next + 1;
+            UnlockedCharacterThisGame = next;
+        }
+    }
+
+    // Highscore, unlocks, achievements and rocket progress; the settings are kept.
+    void ResetState()
+    {
+        EggStore.State.Highscore = 0;
+        EggStore.State.UnlockedCharacters = 1;
+        EggStore.State.CeremonySeen = false;
+        EggStore.State.FurnacesExploded = 0;
+        EggStore.State.Achievements.Clear();
+        UnlockAll = false;
+        ReachedTargets.Clear();
+        UnlockedSeen = -1;
+        NewCharacters.Clear();
+        PendingAchievements.Clear();
+        NewAchievements.Clear();
+        ResetRocketProgress();
+        if (selectedCharacter != 0)
+            SelectCharacter(0);
+        EggStore.Save();
     }
 
     void CollectNewUnlocks()

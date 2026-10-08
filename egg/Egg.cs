@@ -11,8 +11,10 @@ using Assets.Scripts;
 using Assets.Scripts.Atmospherics;
 using Assets.Scripts.GridSystem;
 using Assets.Scripts.Objects;
+using Assets.Scripts.Objects.Entities;
 using Assets.Scripts.Objects.Items;
 using Assets.Scripts.Serialization;
+using Assets.Scripts.Sound;
 using Assets.Scripts.UI;
 using Assets.Scripts.Util;
 
@@ -50,6 +52,7 @@ public partial class Egg
     const float ExplosionSpinMax = 9.0f;
 
     const float RestartCooldown = 2.0f;
+    static readonly uint GameOverFieldTint = ColorWithAlpha(70, 70, 70, 255);
     const float ShakeMaxDuration = 0.9f;
     const float ShakeInitialAmplitude = 10.0f;
     const float ShakeFrequency = 42.0f;
@@ -82,6 +85,8 @@ public partial class Egg
     const int EmptyCell = -1;
     const int BackpackCell = -2;
     const int DrillCell = -3;
+    const int AirCell = -4;
+    const int AirCanisters = 3;
     const int MinDrills = 1;
     const int MaxDrills = 3;
     // pickups with doubled yield per heavy drill
@@ -110,6 +115,9 @@ public partial class Egg
     }
 
     bool IsGameOver = false;
+    // Round ended by suffocation: no explosion, the avatar turns into a skull.
+    bool Suffocated = false;
+    const double SkullMorphDuration = 1.5;
     string GameOverMessage = "";
     double GameOverTime = 0.0;
     Vector2 GameOverHeadCell = Vector2.zero;
@@ -167,11 +175,11 @@ public partial class Egg
     readonly HashSet<int> ReachedTargets = [];
     static Dictionary<string, double> RocketProgress => EggStore.State.RocketProgress;
 
-    const double OxygenDuration = 150.0;
+    const double OxygenDuration = 60.0;
     // refilled on every respawn
     double OxygenStartTime = 0.0;
     // Aimee is a robot and does not breathe.
-    double Oxygen => selectedCharacter == 3 ? 1.0 : Math.Max(0.0, 1.0 - (GameTime - OxygenStartTime) / OxygenDuration);
+    double Oxygen => selectedCharacter == 3 ? 1.0 : Math.Min(1.0, Math.Max(0.0, 1.0 - (GameTime - OxygenStartTime) / OxygenDuration));
 
     static string[] CharacterNames => EggText.CharacterNames;
     static readonly int[] CharacterRequiredScore = [0, 100, 200, 500, 1000];
@@ -244,6 +252,7 @@ public partial class Egg
     bool ShowAudioControl;
     Texture2D Backpack;
     Texture2D Drill;
+    Texture2D AirCanister;
     Texture2D Aimee;
     Texture2D DH;
     Texture2D PDX;
@@ -262,7 +271,9 @@ public partial class Egg
     public Egg(StyledText code)
     {
         InitialCode = code;
+        EnsureMusicEnabled();
         LoadRocketProgress();
+        ApplySettings();
         InitializeStaticAssets();
         StartNewGame(code);
         StartIntro();
@@ -357,13 +368,13 @@ public partial class Egg
         OreSprites = [];
 
         Helmet = Thumbnail("ItemSpaceHelmet");
-        Aimee = Thumbnail("Robot", Helmet);
-        Tail = Thumbnail("ItemMiningBelt", Helmet);
-        Marine = Thumbnail("ApplianceBobbleHeadMarine", Helmet);
+        Aimee = Thumbnail("Robot");
+        Tail = Thumbnail("ItemMiningBelt");
+        Marine = Thumbnail("ApplianceBobbleHeadMarine");
         Head = Helmet;
 
-        Vent = Thumbnail("StructurePassiveVentValve", Helmet);
-        Furnace = Thumbnail("StructureFurnace", Helmet);
+        Vent = Thumbnail("StructurePassiveVentValve");
+        Furnace = Thumbnail("StructureFurnace");
         // The only warm pixels in the thumbnail are the orange activate button; the view window
         // (grey with a yellow frame) sits left of it, offsets measured relative to the button size.
         var button = FindWarmRegion(Furnace, Rect.zero);
@@ -372,8 +383,14 @@ public partial class Egg
             : new Rect(0.40f, 0.32f, 0.22f, 0.20f);
         L.Debug($"Furnace window rect {FurnaceWindow}");
 
-        Backpack = Thumbnail("ItemMiningBackPack", Helmet);
-        Drill = Thumbnail("ItemMiningDrillHeavy", Helmet);
+        Backpack = Thumbnail("ItemMiningBackPack");
+        Drill = Thumbnail("ItemMiningDrillHeavy");
+        AirCanister = Thumbnail("ItemGasCanisterOxygen");
+        Skull = Thumbnail("HumanSkull");
+        BreathInClips = HumanAudioEvent("BreathIn_Stressed");
+        BreathOutClips = HumanAudioEvent("BreathOut_Stressed");
+        GaspClips = HumanAudioEvent("BreathIn_LowPressure");
+        L.Debug($"Breath clips: in={(BreathInClips != null)} out={(BreathOutClips != null)} gasp={(GaspClips != null)}");
 
         // bottom to top: launch mount, engine, two fuselage segments, crew module
         RocketParts.Clear();
@@ -446,12 +463,17 @@ public partial class Egg
 
         IsValveOpen = false;
         FlyingOres.Clear();
+        NextBreathTime = double.NegativeInfinity;
+        OxygenWarned = false;
+        OxygenCriticalWarned = false;
         IsGameOver = false;
+        Suffocated = false;
         GameOverMessage = "";
         GameOverTime = 0.0;
         GameOverHeadCell = Vector2.zero;
         ExplosionParticles.Clear();
-        OxygenStartTime = GameTime;
+        // the first round waits for the board to uncover before the snake moves
+        OxygenStartTime = Math.Max(GameTime, UncoverOreTime);
     }
 
     void StartNewGame(StyledText code)
@@ -469,6 +491,7 @@ public partial class Egg
         MenuHint = MenuHints[Random.Next(MenuHints.Length)];
         JumpThemesIndex = 0;
         JumpsThisGame = 0;
+        UnlockedCharacterThisGame = -1;
         SaveRocketProgress();
         ReachedTargets.Clear();
         for (var i = 0; i < AlloyTargets.Length; i++)
@@ -532,16 +555,19 @@ public partial class Egg
         HasBackpack = false;
         OresPerBelt = DefaultOresPerBelt;
         DrillPickupsLeft = 0;
-        var oreCells = new List<Vector2Int>();
+        // items go anywhere except the start row ahead of the snake
+        var start = new Vector2Int(W / 2, H / 2);
+        var itemCells = new List<Vector2Int>();
         for (var i = 0; i < H; i++)
             for (var j = 0; j < W; j++)
-                if (Field[i, j] >= 0)
-                    oreCells.Add(new Vector2Int(j, i));
-        oreCells = oreCells.OrderBy(_ => rand.Next()).ToList();
+                if (i != start.y || j < start.x || j > start.x + 3)
+                    itemCells.Add(new Vector2Int(j, i));
+        itemCells = itemCells.OrderBy(_ => rand.Next()).ToList();
         var items = new List<int> { BackpackCell };
         items.AddRange(Enumerable.Repeat(DrillCell, rand.Next(MinDrills, MaxDrills + 1)));
-        for (var i = 0; i < items.Count && i < oreCells.Count; i++)
-            Field[oreCells[i].y, oreCells[i].x] = items[i];
+        items.AddRange(Enumerable.Repeat(AirCell, AirCanisters));
+        for (var i = 0; i < items.Count && i < itemCells.Count; i++)
+            Field[itemCells[i].y, itemCells[i].x] = items[i];
 
         StartNewRound();
     }
@@ -1161,9 +1187,10 @@ public partial class Egg
     const int ItemColumns = 3;
 
     // Sprite + "count/needed" cells in three columns spread over the panel width.
-    float DrawItemGrid(Vector2 pos, List<(Texture2D Sprite, double Amount, int Needed)> entries)
+    float DrawItemGrid(Vector2 pos, List<(Texture2D Sprite, double Amount, int Needed)> entries, float imSize = 0f)
     {
-        var imSize = ItemImageSize;
+        if (imSize <= 0f)
+            imSize = ItemImageSize;
         var columns = ItemColumns;
         var dx = ImGui.GetContentRegionAvail().x / columns;
         var dy = imSize + 6;
@@ -1302,16 +1329,7 @@ public partial class Egg
 
         var button = new Vector2(ImGui.GetContentRegionAvail().x, 0);
         if (ImGui.Button("Reset stats", button))
-        {
-            EggStore.State.Highscore = 0;
-            EggStore.State.UnlockedCharacters = 1;
-            EggStore.State.CeremonySeen = false;
-            EggStore.State.FurnacesExploded = 0;
-            EggStore.State.Achievements.Clear();
-            UnlockAll = false;
-            ReachedTargets.Clear();
-            ResetRocketProgress();
-        }
+            ResetState();
         if (ImGui.Button("Unlock all characters", button))
         {
             EggStore.State.UnlockedCharacters = CharacterRequiredScore.Length;
@@ -1324,6 +1342,7 @@ public partial class Egg
             UnlockAchievement(AchievementFan, EggText.FanTitle);
             UnlockAchievement(AchievementSuperFan, EggText.SuperFanTitle);
             UnlockAchievement(AchievementRocketBuilder, EggText.RocketBuilderTitle);
+            UnlockAchievement(AchievementHcf, EggText.HcfTitle);
         }
         if (ImGui.Button("Complete rocket", button))
         {
@@ -1412,7 +1431,7 @@ public partial class Egg
         var origin = ImGui.GetCursorScreenPos();
         var p0 = origin + new Vector2(0.1f * size, 0.2f * size);
 
-        if (IsGameOver)
+        if (IsGameOver && !Suffocated)
         {
             im.AddImage(ImGuiManager.ImGuiPointerFor(Wreckage), p0, p0 + new Vector2(size, size));
         }
@@ -1509,12 +1528,18 @@ public partial class Egg
     }
 
     // Prefab thumbnail; a renamed prefab in a game update must not take the editor down.
-    static Texture2D Thumbnail(string prefabName, Texture2D fallback = null)
+    static Texture2D Thumbnail(string prefabName)
     {
-        var texture = Prefab.Find(prefabName)?.GetThumbnail()?.texture;
+        var texture = Prefab.Find(prefabName)?.GetThumbnail()?.texture ?? LoadThumbnailResource(prefabName);
         if (texture == null)
             L.Debug($"No thumbnail for {prefabName}");
-        return texture ?? fallback ?? Texture2D.whiteTexture;
+        return texture ?? Texture2D.whiteTexture;
+    }
+
+    static Texture2D LoadThumbnailResource(string name)
+    {
+        var path = $"ui/thumbnails/{name}";
+        return Resources.Load<Sprite>(path)?.texture ?? Resources.Load<Texture2D>(path);
     }
 
     // Thumbnails of all build states in construction order; falls back to the prefab thumbnail.
@@ -1632,7 +1657,7 @@ public partial class Egg
 
     Vector2 GetShakeOffset()
     {
-        if (!IsGameOver)
+        if (!IsGameOver || Suffocated || !EggStore.State.ScreenShake)
             return Vector2.zero;
 
         var t = (float)Math.Min(GameOverTime, ShakeMaxDuration);
@@ -1690,8 +1715,13 @@ public partial class Egg
         var textColor = ColorWithAlpha(255, 220, 180, messageAlpha);
         var boomColor = ColorWithAlpha(255, 120, 60, messageAlpha);
 
-        var bottomPos = p0 + new Vector2(W * cellSize - (GameOverMessage.Length + 1) * CharWidth, H * cellSize - 2 * LineHeightWithSpacing);
-        list.AddText(bottomPos, boomColor, EggText.Boom);
+        if (Suffocated)
+            DrawSkullMorph(p0, cellSize);
+
+        var messageSize = ImGui.CalcTextSize(GameOverMessage);
+        var bottomPos = p0 + new Vector2(W * cellSize - messageSize.x - CharWidth, H * cellSize - messageSize.y - 20 - 0.5f * LineHeight);
+        if (!Suffocated)
+            list.AddText(bottomPos, boomColor, EggText.Boom);
         list.AddText(bottomPos + new Vector2(0, 20), textColor, GameOverMessage);
 
         var centerX = p0.x + playSize.x * 0.5f;
@@ -1717,16 +1747,125 @@ public partial class Egg
                 list.AddText(linePos, ColorWithAlpha(255, 235, 200, 255), line);
                 lineY += LineHeightWithSpacing;
             }
+
+            if (UnlockedCharacterThisGame >= 0)
+            {
+                lineY += LineHeightWithSpacing;
+                var unlockSize = ImGui.CalcTextSize(EggText.CharacterUnlocked);
+                var unlockPos = new Vector2(centerX - unlockSize.x * 0.5f, lineY);
+                list.AddText(unlockPos + new Vector2(1, 1), ColorWithAlpha(0, 0, 0, 180), EggText.CharacterUnlocked);
+                list.AddText(unlockPos, NewUnlockColor(255), EggText.CharacterUnlocked);
+                lineY += LineHeightWithSpacing * 1.5f;
+
+                var portrait = 4f * cellSize;
+                var portraitPos = new Vector2(centerX - portrait * 0.5f, lineY);
+                var glow = new Vector2(6, 6);
+                list.AddRectFilled(portraitPos - glow, portraitPos + new Vector2(portrait, portrait) + glow, NewUnlockColor((byte)(70 + 110 * Pulse)), 8f);
+                list.AddImage(ImGuiManager.ImGuiPointerFor(CharacterTextures[UnlockedCharacterThisGame]), portraitPos, portraitPos + new Vector2(portrait, portrait));
+                lineY += portrait + 0.5f * LineHeightWithSpacing;
+
+                var name = CharacterNames[UnlockedCharacterThisGame];
+                var nameSize = ImGui.CalcTextSize(name);
+                var namePos = new Vector2(centerX - nameSize.x * 0.5f, lineY);
+                list.AddText(namePos + new Vector2(1, 1), ColorWithAlpha(0, 0, 0, 180), name);
+                list.AddText(namePos, ColorWithAlpha(255, 235, 200, 255), name);
+            }
         }
 
-        var cooldownRemaining = Math.Max(0.0, RestartCooldown - GameOverTime);
         var launchReady = NumLives <= 0 && LaunchPending;
-        var restartHint = cooldownRemaining > 0.0
-            ? string.Format(launchReady ? EggText.LaunchIn : EggText.RestartIn, cooldownRemaining)
-            : launchReady ? EggText.Launch : EggText.Restart;
+        var restartHint = launchReady ? EggText.Launch : NumLives > 0 ? EggText.NextRound : EggText.Restart;
         var hintSize = ImGui.CalcTextSize(restartHint);
         var hintPos = new Vector2(p0.x + playSize.x - hintSize.x - 8, p0.y + 8);
         list.AddText(hintPos, ColorWithAlpha(220, 235, 255, 240), restartHint);
+    }
+
+    // Heavy breathing once oxygen runs low, faster the emptier the tank; suit voice warnings at two levels.
+    const double OxygenWarningLevel = 0.30;
+    const double OxygenCriticalLevel = 0.15;
+    double NextBreathTime = double.NegativeInfinity;
+    bool BreathOut;
+    GameAudioClipsData BreathInClips;
+    GameAudioClipsData BreathOutClips;
+    GameAudioClipsData GaspClips;
+
+    // The breath sounds are audio events of the human prefab, not global clip data.
+    static GameAudioClipsData HumanAudioEvent(string name)
+    {
+        foreach (var thing in Prefab.AllPrefabs)
+            if (thing is Human human)
+                foreach (var audioEvent in human.AudioEvents)
+                    if (audioEvent.Name == name && audioEvent.ClipsData != null)
+                        return audioEvent.ClipsData;
+        return EggAudio.FindByName(name);
+    }
+
+    bool OxygenWarned;
+    bool OxygenCriticalWarned;
+
+    // An AudioSource caps at full volume, so loud clips are doubled up (+6 dB).
+    static void PlayLoud(AudioClip clip, float pitch = 1f)
+    {
+        if (clip == null)
+            return;
+        EggAudio.PlayClip(clip, 2f, pitch);
+        EggAudio.PlayClip(clip, 2f, pitch);
+    }
+
+    static void PlayLoud(GameAudioClipsData clips, float pitch = 1f)
+    {
+        if (clips == null || clips.Clips.Count == 0)
+            return;
+        PlayLoud(clips.Clips[UnityEngine.Random.Range(0, clips.Clips.Count)], pitch);
+    }
+
+    void UpdateBreathing(double now)
+    {
+        if (IsGameOver || Oxygen > OxygenWarningLevel)
+            return;
+        if (!OxygenWarned)
+        {
+            OxygenWarned = true;
+            Toast(EggText.OxygenLow, 3);
+            // the suit's voice line (current voice language), else the warning chime
+            var voice = StatusUpdates.Instance?.OxygenWarning?.AudioAlert;
+            if (voice != null)
+                PlayLoud(voice);
+            else
+                EggAudio.Play("SFX_UI_Notify_WARNING", 2f);
+        }
+        if (!OxygenCriticalWarned && Oxygen <= OxygenCriticalLevel)
+        {
+            OxygenCriticalWarned = true;
+            Toast(EggText.OxygenCritical, 3);
+            EggAudio.Play("SFX_UI_Notify_CRITICAL", 2f);
+            PlayLoud(StatusUpdates.Instance?.OxygenCritical?.AudioAlert);
+        }
+        if (now < NextBreathTime)
+            return;
+        var panic = (float)(1.0 - Oxygen / OxygenWarningLevel);
+        PlayLoud(BreathOut ? BreathOutClips : BreathInClips, 1f + 0.15f * panic);
+        BreathOut = !BreathOut;
+        NextBreathTime = now + 1.4 - 0.9 * panic;
+    }
+
+    // Dimmed belts stay in place, the head crossfades into a skull.
+    void DrawSkullMorph(Vector2 p0, float cellSize)
+    {
+        var list = ImGui.GetWindowDrawList();
+        var tex = ImGuiManager.ImGuiPointerFor(HasBackpack ? Backpack : Tail);
+        var cell = new Vector2(cellSize, cellSize);
+        for (var i = 1; i < Snake.Count; i++)
+        {
+            var p = p0 + new Vector2(Snake[i].x, Snake[i].y) * cellSize;
+            list.AddImage(tex, p + 0.1f * cell, p + 0.9f * cell, Vector2.zero, Vector2.one, GameOverFieldTint);
+        }
+
+        var scale = 1.6f;
+        var shift = 0.5f * (scale - 1.0f);
+        var pHead = p0 + (GameOverHeadCell - new Vector2(shift, shift)) * cellSize;
+        var t = Mathf.Clamp01((float)(GameOverTime / SkullMorphDuration));
+        DrawSprite(Head, pHead, cellSize * scale, Rotation, ColorWithAlpha(255, 255, 255, (byte)(255 * (1f - t))));
+        DrawSprite(Skull, pHead, cellSize * scale, 0, ColorWithAlpha(255, 255, 255, (byte)(255 * t)));
     }
 
     public void UpdateAtmosphere(double dt)
@@ -1794,6 +1933,8 @@ public partial class Egg
         if (IsGameOver)
         {
             GameOverTime += frameDt;
+            // the oxygen clock pauses with the round
+            OxygenStartTime += frameDt;
             UpdateExplosion(frameDt);
             LastUpdateTime = now;
             return;
@@ -1817,9 +1958,11 @@ public partial class Egg
         if (RocketComplete)
             UnlockAchievement(AchievementRocketBuilder, EggText.RocketBuilderTitle);
 
+        UpdateBreathing(now);
         if (Oxygen <= 0)
         {
-            GameOver(EggText.GameOverOxygen);
+            GameOver(EggText.GameOverOxygen, explosion: false);
+            PlayLoud(GaspClips);
             return;
         }
 
@@ -1880,6 +2023,13 @@ public partial class Egg
             DrillPickupsLeft += DrillPickups;
             EggAudio.Play(UIAudioManager.UiEquipBackHash);
         }
+        else if (value == AirCell)
+        {
+            OxygenStartTime = GameTime;
+            OxygenWarned = false;
+            OxygenCriticalWarned = false;
+            EggAudio.Play(UIAudioManager.UiEquipBackHash);
+        }
         else if (value >= 0)
         {
             EggAudio.Play(UIAudioManager.UiEquipBeltHash);
@@ -1922,7 +2072,10 @@ public partial class Egg
         EggAudio.SetPlaying("Alarm7", stressLevel > 0 && stressLevel <= 0.5);
         EggAudio.SetPlaying("Alarm4", stressLevel > 0.5);
         if (stressLevel > 1.0)
-            GameOver(EggText.GameOverExplosion);
+        {
+            GameOver(EggText.GameOverExplosion, furnaceExploded: true);
+            UnlockAchievement(AchievementHcf, EggText.HcfTitle);
+        }
 
         if (selectedCharacter == 3)
         {
@@ -1932,13 +2085,17 @@ public partial class Egg
         }
     }
 
-    public void GameOver(string msg)
+    // furnaceExploded: the furnace is gone, so the game ends regardless of lives left.
+    public void GameOver(string msg, bool explosion = true, bool furnaceExploded = false)
     {
         if (IsGameOver)
             return;
 
-        NumLives--;
-        EggStore.State.FurnacesExploded++;
+        if (furnaceExploded && NumLives > 1)
+            msg += "\n" + string.Format(EggText.OneFurnace, NumLives, EggText.Hunters);
+        NumLives = furnaceExploded ? 0 : NumLives - 1;
+        if (explosion)
+            EggStore.State.FurnacesExploded++;
         if (NumLives <= 0)
         {
             FinalScore = GetScore();
@@ -1947,13 +2104,17 @@ public partial class Egg
         EggStore.Save();
 
         EggAudio.StopAll();
+        if (UnlockedCharacterThisGame >= 0)
+            EggAudio.Play("SFX_UI_PointOfInterestDiscovered");
 
         IsGameOver = true;
+        Suffocated = !explosion;
         GameOverMessage = msg;
         GameOverTime = 0.0;
         GameOverHeadCell = Snake.Count > 0 ? new Vector2(Snake[0].x, Snake[0].y) : new Vector2(W / 2f, H / 2f);
 
-        SpawnExplosionAtHead();
+        if (explosion)
+            SpawnExplosionAtHead();
 
         Velocity = Vector2Int.zero;
         IsValveOpen = false;
@@ -1986,6 +2147,9 @@ public partial class Egg
         // The cheater modal owns all input; closing the egg underneath it would leave the popup stuck open.
         if (CheaterDialogOpen && GameMode == CharacterSelectionMode)
             return;
+        // The help and settings dialogs handle their own keys (Escape closes them, not the egg).
+        if (HelpOpen || SettingsOpen)
+            return;
 
         // Letter keys are not mapped to ImGuiKey in the game's backend, so use Unity input (like the HCF combo).
         if (GameMode != CeremonyMode && UnityEngine.Input.GetKeyDown(KeyCode.N) && !ImGui.GetIO().WantTextInput)
@@ -1994,9 +2158,14 @@ public partial class Egg
             EggMusic.PlayRandom();
         }
 
+        if (GameMode == CharacterSelectionMode && !ImGui.GetIO().WantTextInput)
+            for (var i = 0; i < CharacterHotkeys.Length; i++)
+                if (UnityEngine.Input.GetKeyDown(CharacterHotkeys[i]) || UnityEngine.Input.GetKeyDown(CharacterKeypadHotkeys[i]))
+                    SelectCharacter(i);
+
         if (GameMode == IntroMode)
         {
-            if (ImGui.IsKeyPressed(ImGuiKey.Space) && AssetsReady)
+            if ((ImGui.IsKeyPressed(ImGuiKey.Space) || IntroSkipped) && AssetsReady)
                 EndIntro();
             else if (ImGui.IsKeyPressed(ImGuiKey.Escape))
                 Close();
@@ -2018,13 +2187,16 @@ public partial class Egg
                 return;
             }
 
-            if (ImGui.IsKeyPressed(ImGuiKey.Space) && GameOverTime >= RestartCooldown)
+            // Space skips the cooldown: next round, or a new game with the same character.
+            if (ImGui.IsKeyPressed(ImGuiKey.Space))
             {
+                if (NumLives > 0)
+                    StartNewRound();
                 // the rocket is only checked between games so the run can go on for a higher score
-                if (NumLives <= 0 && LaunchPending)
+                else if (LaunchPending)
                     StartCeremony();
                 else
-                    StartNewGame(InitialCode);
+                    StartPlaying();
                 return;
             }
 
@@ -2161,6 +2333,45 @@ public partial class Egg
     }
 
     // Cleared board: empty green grid with twinkling sparkles.
+    // Flickering starburst with furnace fragments flying out.
+    static void DrawHcfIcon(ImDrawListPtr draw, Vector2 p0, Vector2 p1)
+    {
+        IconArea(p0, p1, out var c, out var r);
+        var t = (float)ImGui.GetTime();
+        const int spikes = 12;
+        var outer = new Vector2[spikes * 2];
+        for (var i = 0; i < spikes * 2; i++)
+        {
+            var a = i * Mathf.PI / spikes + t * 0.6f;
+            var flicker = 0.85f + 0.15f * Mathf.Sin(t * 9f + i * 1.7f);
+            var rad = (i % 2 == 0 ? 0.95f : 0.5f) * r * flicker;
+            outer[i] = c + Dir(a) * rad;
+        }
+        var glow = ColorWithAlpha(255, 90, 20, (byte)(90 + 60 * Pulse));
+        draw.AddCircleFilled(c, r * 1.05f, glow, 32);
+        // stars are not convex: fan them from the center
+        for (var i = 0; i < outer.Length; i++)
+            draw.AddTriangleFilled(c, outer[i], outer[(i + 1) % outer.Length], ColorWithAlpha(255, 150, 30, 255));
+        var inner = new Vector2[spikes];
+        for (var i = 0; i < spikes; i++)
+            inner[i] = c + Dir(i * 2f * Mathf.PI / spikes - t * 0.9f) * r * (i % 2 == 0 ? 0.45f : 0.25f);
+        for (var i = 0; i < inner.Length; i++)
+            draw.AddTriangleFilled(c, inner[i], inner[(i + 1) % inner.Length], ColorWithAlpha(255, 240, 160, 255));
+
+        // fragments on a repeating outward flight
+        for (var i = 0; i < 6; i++)
+        {
+            var phase = (t * 0.7f + i * 0.17f) % 1f;
+            var a = i * 1.05f + 0.4f;
+            var p = c + Dir(a) * r * (0.3f + 0.75f * phase);
+            var size = r * 0.13f * (1f - 0.5f * phase);
+            var alpha = (byte)(255 * (1f - phase));
+            var d1 = Dir(a + phase * 6f) * size;
+            var d2 = new Vector2(-d1.y, d1.x);
+            draw.AddQuadFilled(p + d1, p + d2, p - d1, p - d2, ColorWithAlpha(50, 50, 55, alpha));
+        }
+    }
+
     static void DrawCleanSweepIcon(ImDrawListPtr draw, Vector2 p0, Vector2 p1)
     {
         IconArea(p0, p1, out var c, out var r);
@@ -2255,10 +2466,22 @@ public partial class Egg
 
     string MenuHint = "";
     string[] MenuHints =>
-        [string.Format(EggText.HintOxygen, OxygenDuration / 60), .. EggText.Hints.Select(h => string.Format(h, DefaultOresPerBelt))];
+        [string.Format(EggText.HintOxygen, OxygenDuration), .. EggText.Hints.Select(h => string.Format(h, DefaultOresPerBelt))];
 
     string selectedPerks = "";
     int selectedCharacter = 0;
+
+    void SelectCharacter(int i)
+    {
+        if (!IsUnlocked(i))
+            return;
+        selectedCharacter = i;
+        Head = CharacterTextures[i];
+        selectedPerks = EggText.CharacterPerks[i];
+    }
+
+    static readonly KeyCode[] CharacterHotkeys = [KeyCode.Alpha1, KeyCode.Alpha2, KeyCode.Alpha3, KeyCode.Alpha4, KeyCode.Alpha5];
+    static readonly KeyCode[] CharacterKeypadHotkeys = [KeyCode.Keypad1, KeyCode.Keypad2, KeyCode.Keypad3, KeyCode.Keypad4, KeyCode.Keypad5];
     public void DrawCharacterSelection()
     {
         var vp = ImGui.GetMainViewport();
@@ -2327,11 +2550,9 @@ public partial class Egg
             else
             {
                 if (ImGui.ImageButton(ImGuiManager.ImGuiPointerFor(tex[i]), new Vector2(img, img)))
-                {
-                    selectedCharacter = i;
-                    Head = tex[i];
-                    selectedPerks = perks[i];
-                }
+                    SelectCharacter(i);
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip(string.Format(EggText.CharacterTooltip, i + 1));
 
                 var tw = ImGui.CalcTextSize(names[i]).x;
                 ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (img - tw) * .5f);
@@ -2353,7 +2574,7 @@ public partial class Egg
         var cell = Mathf.Clamp((half - 6 * charWidth) / AlloyTargets.Length, Math.Max(104f, 10 * charWidth), 150f);
         var badge = AchievementBadgeSize;
         var gap = 2 * charWidth;
-        var badgesWidth = 5 * badge.x + 4 * gap;
+        var badgesWidth = 6 * badge.x + 5 * gap;
         var rowHeight = SectionTitleHeight() + Math.Max(cell * 0.58f + cell * 0.23f + 8f, badge.y);
         var perksHeight = (perks.Max(s => s.Split('\n').Length) + 0.5f) * lineHeight;
         var separatorHeight = ImGui.GetStyle().ItemSpacing.y * 2 + 1f;
@@ -2395,6 +2616,8 @@ public partial class Egg
         DrawSectionTitle(EggText.AchievementsTitle, badgesWidth);
         DrawAchievement(AchievementRocketBuilder, "ROCKET", "BUILDER", EggText.RocketBuilderTooltip, HasAchievement(AchievementRocketBuilder), DrawRocketBuilderIcon);
         ImGui.SameLine(0, gap);
+        DrawAchievement(AchievementHcf, "HALT AND", "CATCH FIRE", EggText.HcfTooltip, HasAchievement(AchievementHcf), DrawHcfIcon);
+        ImGui.SameLine(0, gap);
         DrawAchievement(AchievementTurboBoost, "TURBO", "BOOST", EggText.TurboBoostTooltip, HasAchievement(AchievementTurboBoost), DrawTurboBoostIcon, hidden: true, titleInIcon: true);
         ImGui.SameLine(0, gap);
         DrawAchievement(AchievementCleanSweep, "CLEAN", "SWEEP", EggText.CleanSweepTooltip, HasAchievement(AchievementCleanSweep), DrawCleanSweepIcon, hidden: true);
@@ -2416,9 +2639,18 @@ public partial class Egg
         var menuButton = new Vector2(120, 40);
         var menuStep = menuButton.x + 10f;
         var startX = avail.x - menuButton.x - 20f;
+
+        // Help and settings in the center, scenes and start on the right.
+        ImGui.SameLine((avail.x - 2 * menuStep + 10f) * 0.5f);
+        if (ImGui.Button(EggText.MenuHelp, menuButton))
+            HelpOpen = true;
+        ImGui.SameLine();
+        if (ImGui.Button(EggText.MenuSettings, menuButton))
+            SettingsOpen = true;
+
         ImGui.SameLine(startX - (RocketComplete ? 3 : 1) * menuStep);
         if (ImGui.Button(EggText.MenuIntro, menuButton))
-            StartIntro();
+            StartIntro(manual: true);
         if (RocketComplete)
         {
             ImGui.SameLine();
@@ -2433,15 +2665,20 @@ public partial class Egg
         }
 
         ImGui.SameLine(startX);
-        if (ImGui.Button(EggText.Start, menuButton) || (ImGui.IsKeyPressed(ImGuiKey.Enter) && !CheaterDialogOpen))
-        {
-            StartNewGame(InitialCode);
-            GameMode = PlayingMode;
-            EggMusic.AutoAdvance = true;
-            if (EggMusic.Current == null || EggMusic.Current == EggMusic.SpaceMusic)
-                EggMusic.PlayRandom();
-        }
+        if (ImGui.Button(EggText.Start, menuButton) || (ImGui.IsKeyPressed(ImGuiKey.Enter) && !CheaterDialogOpen && !HelpOpen && !SettingsOpen))
+            StartPlaying();
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(EggText.StartTooltip);
+    }
 
+    // New game with the selected character, straight into the playfield.
+    void StartPlaying()
+    {
+        StartNewGame(InitialCode);
+        GameMode = PlayingMode;
+        EggMusic.AutoAdvance = true;
+        if (EggMusic.Current == null || EggMusic.Current == EggMusic.SpaceMusic)
+            EggMusic.PlayRandom();
     }
 
     public void DrawGame()
@@ -2533,23 +2770,25 @@ public partial class Egg
         {
             var p = p0 + i * y;
             var drawImages = GameTime / UncoverOreTime * H > i;
-            if (IsGameOver && (i < 2 || i > (H - 3) || (i > 4 && i < 7)))
-                continue;
+            // dimmed after the round so the game over texts stay readable
+            var tint = IsGameOver ? GameOverFieldTint : 0xFFFFFFFF;
             for (var j = 0; j < W; j++)
             {
                 var e = Field[i, j];
                 if (drawImages)
                 {
                     if (e >= 0)
-                        list.AddImage(ImGuiManager.ImGuiPointerFor(OreSprites[e]), p, p + x + y);
+                        list.AddImage(ImGuiManager.ImGuiPointerFor(OreSprites[e]), p, p + x + y, Vector2.zero, Vector2.one, tint);
                     else if (e == BackpackCell)
-                        list.AddImage(ImGuiManager.ImGuiPointerFor(Backpack), p, p + x + y);
+                        list.AddImage(ImGuiManager.ImGuiPointerFor(Backpack), p, p + x + y, Vector2.zero, Vector2.one, tint);
                     else if (e == DrillCell)
-                        list.AddImage(ImGuiManager.ImGuiPointerFor(Drill), p, p + x + y);
+                        list.AddImage(ImGuiManager.ImGuiPointerFor(Drill), p, p + x + y, Vector2.zero, Vector2.one, tint);
+                    else if (e == AirCell)
+                        list.AddImage(ImGuiManager.ImGuiPointerFor(AirCanister), p, p + x + y, Vector2.zero, Vector2.one, tint);
                 }
                 else if (Code[i, j] != ' ')
                 {
-                    list.AddText(font, 30, p + offsetY * y, CodeColors[i, j], Code[i, j].ToString());
+                    list.AddText(font, 30, p + offsetY * y, IsGameOver ? CodeColors[i, j] & 0xFF000000 | GameOverFieldTint & 0x00FFFFFF : CodeColors[i, j], Code[i, j].ToString());
                 }
 
                 p += x;
@@ -2632,7 +2871,7 @@ public partial class Egg
 
         // keep the egg above the editor window; while helper windows are open they refocus themselves instead
         var cheaterOpen = CheaterDialogOpen && GameMode == CharacterSelectionMode;
-        var helperWindowOpen = DebugMenuOpen || ShowSoundBrowser || ShowAudioControl || cheaterOpen;
+        var helperWindowOpen = DebugMenuOpen || ShowSoundBrowser || ShowAudioControl || cheaterOpen || HelpOpen || SettingsOpen;
         if (!helperWindowOpen)
             ImGui.SetNextWindowFocus();
 
@@ -2652,7 +2891,10 @@ public partial class Egg
                 DrawCeremony();
                 break;
             case IntroMode:
-                DrawIntro();
+                if (IntroSkipped)
+                    DrawLoadingScreen();
+                else
+                    DrawIntro();
                 break;
             default:
                 DrawGame();
@@ -2683,9 +2925,13 @@ public partial class Egg
         }
         if (cheaterOpen)
             DrawCheaterDialog();
+        if (HelpOpen)
+            DrawHelpDialog();
+        if (SettingsOpen)
+            DrawSettingsDialog();
     }
 
-    public void DrawSprite(Texture2D sprite, Vector2 pos, float size, int rotations = 0)
+    public void DrawSprite(Texture2D sprite, Vector2 pos, float size, int rotations = 0, uint tint = 0xFFFFFFFF)
     {
         var x = new Vector2(size, 0);
         var y = new Vector2(0, size);
@@ -2695,7 +2941,8 @@ public partial class Egg
         if (rotations == 2)
             vpos = [vpos[3], vpos[2], vpos[1], vpos[0]];
         var im = ImGui.GetWindowDrawList();
-        im.AddImageQuad(ImGuiManager.ImGuiPointerFor(sprite), vpos[0], vpos[1], vpos[2], vpos[3]);
+        im.AddImageQuad(ImGuiManager.ImGuiPointerFor(sprite), vpos[0], vpos[1], vpos[2], vpos[3],
+            new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1), tint);
     }
 
     public void Close()
@@ -2707,7 +2954,46 @@ public partial class Egg
         EggMusic.AutoAdvance = true;
         SaveRocketProgress();
         EggAudio.StopAll(includeMusic: true);
+        RestoreMusicSetting();
         IsOpen = false;
+    }
+
+    // The egg music runs on the game's music bus; a muted music setting is lifted while the egg is open.
+    static int? SavedMusicVolume;
+    const int EggMusicVolume = 100;
+
+    static void EnsureMusicEnabled()
+    {
+        var data = Assets.Scripts.Serialization.Settings.CurrentData;
+        if (data == null || data.MusicVolume > 0 || SavedMusicVolume.HasValue)
+            return;
+        try
+        {
+            SavedMusicVolume = data.MusicVolume;
+            data.MusicVolume = EggMusicVolume;
+            Assets.Scripts.Serialization.Settings.ApplyVolumeSetting(SettingType.MusicVolume);
+            L.Debug($"Egg: music volume raised from {SavedMusicVolume} to {EggMusicVolume}");
+        }
+        catch (Exception e)
+        {
+            L.Debug($"Egg: could not change the music volume: {e.Message}");
+        }
+    }
+
+    static void RestoreMusicSetting()
+    {
+        if (!SavedMusicVolume.HasValue)
+            return;
+        try
+        {
+            Assets.Scripts.Serialization.Settings.CurrentData.MusicVolume = SavedMusicVolume.Value;
+            Assets.Scripts.Serialization.Settings.ApplyVolumeSetting(SettingType.MusicVolume);
+        }
+        catch (Exception e)
+        {
+            L.Debug($"Egg: could not restore the music volume: {e.Message}");
+        }
+        SavedMusicVolume = null;
     }
 }
 

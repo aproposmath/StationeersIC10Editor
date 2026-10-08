@@ -30,15 +30,17 @@ public static class EggText
     [
         "",
         "The Schmitt Trigger - Automatic Vent Control\n  - opens furnace vent when pressure reaches 55MPa\n  - closes it when dropping below 50MPa",
-        "Stress-Tested Entrepreneur\n - Furnace tolerates up to 500 percent stress (it's fine)\n   -> enables ultra-high-pressure smelting for increased speed and efficiency\n - Owns alloy distributor Alloo\n   -> 30%% bonus points when smelting alloys",
+        "Stress-Tested Entrepreneur\n - Furnace tolerates up to 500 percent stress (it's fine)\n   -> enables ultra-high-pressure smelting for increased efficiency\n - Owns alloy distributor Alloo\n   -> 30%% bonus points",
         "- Double mining yield\n- Can jump over ore belts (once every 2 seconds)\n- Occasionally gets stuck, jumps away, and drops ores\n- No oxygen consumption",
         "- Nine lives",
     ];
     public const string DjName = "JacksonTheMaster";
     public const string Locked = "Locked";
+    public const string CharacterTooltip = "Hotkey: {0}";
+    public const string StartTooltip = "Hotkey: Enter";
     public const string UnlockedAt = "Reach {0} points with the previous character to unlock";
     public const string HintFormat = "Hint: {0}";
-    public const string HintOxygen = "Oxygen lasts {0} minutes. Belts make you faster.";
+    public const string HintOxygen = "Oxygen lasts {0} seconds. Air canisters refill it.";
     public static readonly string[] Hints =
     [
         "The furnace will explode at 100%% stress!",
@@ -58,6 +60,8 @@ public static class EggText
     public const string Start = "Start";
     public const string TurboBoostTooltip = "Turbo Boost: have Aimee jump 8 times in one game";
     public const string TurboBoostTitle = "Turbo Boost";
+    public const string HcfTitle = "Halt and Catch Fire";
+    public const string HcfTooltip = "Halt and Catch Fire: blow up a furnace";
     public const string CleanSweepTooltip = "Clean Sweep: clear the whole board of ores and ices";
     public const string CleanSweepTitle = "Clean Sweep";
     public const string AchievementUnlocked = "Achievement unlocked: {0}";
@@ -86,8 +90,74 @@ public static class EggText
     public const string RocketProgressTitle = "Progress";
     public const string AchievementsTitle = "Achievements";
     public const string MenuIntro = "Intro";
+    public const string MenuHelp = "Help";
+    public const string MenuSettings = "Settings";
     public const string MenuParty = "Party";
     public const string MenuCredits = "Credits";
+
+    // Settings dialog
+    public const string SettingsTitle = "Settings";
+    public const string SettingsSoundVolume = "Sound volume";
+    public const string SettingsMusicVolume = "Music volume";
+    public const string SettingsSkipIntro = "Skip intro";
+    public const string SettingsScreenShake = "Screen shake";
+    public const string SettingsClose = "Close";
+    public const string SettingsReset = "Reset state";
+    public const string SettingsResetTooltip = "Forget highscore, unlocked characters, achievements and rocket progress";
+    public const string SettingsResetTitle = "Reset state?";
+    public const string SettingsResetMessage = "This deletes your highscore, unlocked characters, achievements and the rocket progress. The settings stay. There is no undo.";
+    public const string SettingsResetConfirm = "Reset";
+    public const string SettingsResetCancel = "Cancel";
+    public const string SettingsResetDone = "State reset. This is fine.";
+
+    // Help dialog
+    public const string HelpTitle = "How to play";
+    public const string HelpClose = "Close";
+    public const string HelpGoalTitle = "Goal";
+    public static readonly string[] HelpGoal =
+    [
+        "Collect ores and ices to smelt them into alloys.",
+        "Keep furnace pressure under control (vent by holding space).",
+        "Smelt all ingots the rocket needs. Progress is persistent.",
+    ];
+    public const string HelpControlsTitle = "Controls";
+    public static readonly (string Key, string Action)[] HelpControls =
+    [
+        ("Arrow keys", "steer"),
+        ("Space (hold)", "open the vent, lowers pressure"),
+        ("Space", "after a round: play again"),
+        ("Esc", "menu / close"),
+        ("N", "next song"),
+    ];
+    public const string HelpAlloysTitle = "Alloys";
+    public static readonly string[] HelpAlloyHeader = ["Alloy", "Min temp", "Min pressure", "Ores per ingot", "Points"];
+    public const string HelpAlloyTemperature = "{0,5:0} K";
+    public const string HelpAlloyPressure = "{0,5:0.#} MPa";
+    public const string HelpAlloyPoints = "{0,3} pts";
+    public const string HelpAlloyNote = "There are no upper limits for alloy smelting: more pressure and temperature is always better!";
+    public const string HelpLoseTitle = "You lose the round when:";
+    public static readonly string[] HelpLose =
+    [
+        "you hit the wall or your own belts",
+        "stress reaches 100 %",
+        "oxygen runs out",
+    ];
+    public const string HelpHudTitle = "Furnace panel";
+    // One line per gauge of the sample panel, same order as Egg.DrawHelpHud
+    public static readonly string[] HelpHud =
+    [
+        "time left in this round, air canisters refill it",
+        "increases above 60 MPa, keep below 100",
+        "reduce with vent (holding space)",
+        "",
+        "scales with temperature",
+        "scales with pressure",
+        "",
+        "",
+        "ores in the furnace / still needed for the rocket",
+        "ingots smelted / needed for the rocket",
+        "",
+    ];
 
     // Rocket part built per alloy target, same order as Egg.AlloyTargets
     public static readonly string[] AlloyParts = ["launch mount", "engine", "lower fuselage", "upper fuselage", "crew module"];
@@ -97,8 +167,11 @@ public static class EggText
 
     // Game over
     public const string GameOverCollision = "Ran into a wall. Or yourself. Mostly yourself.";
-    public const string GameOverExplosion = "hcf executed successfully. Furnace exploded.";
-    public const string GameOverOxygen = "Out of oxygen.";
+    public const string GameOverExplosion = "Furnace exploded.";
+    public const string OneFurnace = "You had {0} {1}, but only one furnace.";
+    public const string OxygenLow = "Oxygen low! Grab an air canister.";
+    public const string OxygenCritical = "Oxygen critical!";
+    public const string GameOverOxygen = "Out of oxygen. The furnace is fine, you are not.";
     public const string Boom = "BOOM!";
     public const string GameOver = "GAME OVER";
     public const string Respawn = "Respawning ({0} {1} left).";
@@ -106,10 +179,10 @@ public static class EggText
     public const string Hunters = "Hunters";
     public const string FinalScore = "Final score: {0}";
     public const string NewHighscore = "NEW HIGHSCORE!";
-    public const string RestartIn = "(press space to restart in {0:F1}s)";
-    public const string Restart = "(press space to restart)";
-    public const string LaunchIn = "(rocket complete! launch party in {0:F1}s)";
-    public const string Launch = "(rocket complete! press space for the launch party)";
+    public const string CharacterUnlocked = "New character unlocked:";
+    public const string Restart = "(space: play again, esc: menu)";
+    public const string NextRound = "(space: next round, esc: menu)";
+    public const string Launch = "(rocket complete! space: launch party, esc: menu)";
 
     // Ceremony
     public const string PartyAnnounce = "You did it!\nWe have enough alloys to build the rocket.\nLet's party!";
@@ -125,7 +198,6 @@ public static class EggText
     public const string IcarusName = "Icarus";
     public const string LunaName = "Luna";
     public const string HintSkip = "Esc: skip";
-    public const string HintClose = "Esc: title screen";
     public static readonly string[] DjLines =
     [
         "Managing game servers shouldn't be rocket science...\nunless it's a rocket game!",
@@ -177,6 +249,13 @@ public static class EggText
         ],
     };
 
+    // Credits finale
+    public const string FinaleChip = "Hey, there's an IC10 chip. I wonder what the program does.";
+    public const string FinaleTurnOn = "*turns it on*";
+    public const string FinaleNote = "*IC10 chip executing 'hcf # this is fine'*";
+    public const string FinaleNo = "NOOOO!";
+    public const string FinaleNotAgain = "Not again....";
+
     // Credits page
     public const string CreditsTitle = "THE END";
     public const string CreditsScore = "Highscore: {0}";
@@ -187,7 +266,8 @@ public static class EggText
     [
         "SemlerPDX, for the Schmitt Trigger and his community efforts",
         "Dean and all of Rocketwerkz, for this awesome game",
-        "JacksonTheMaster, for his ideas and the music",
+        "JacksonTheMaster, for testing/feedback and the music",
+        "VFox32, for testing/feedback",
         "WIKUS, for the music",
         "You, for playing this mod",
         "All Stationeers modders for making this game even more awesome",

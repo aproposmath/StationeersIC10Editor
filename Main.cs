@@ -255,6 +255,7 @@ public class IC10EditorPlugin : BaseUnityPlugin
 
     private void OnDestroy()
     {
+        IC10.IC10CodeFormatter.CloseEgg();
         EggAudio.Shutdown();
 #if DEBUG
         if (!ModUtils.IsLoadedByScriptEngine(typeof(IC10EditorPlugin)))

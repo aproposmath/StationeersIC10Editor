@@ -36,6 +36,9 @@ public static class EggAudio
         internal AudioSource Source;
         internal int Hash;
         internal AudioBus Bus;
+        // volume before the user's bus setting; Unscaled voices (keep-awake hum) ignore the settings
+        internal float BaseVolume;
+        internal bool Unscaled;
         internal float StartedAt;
         internal float StopAt = float.PositiveInfinity;
 
@@ -51,6 +54,17 @@ public static class EggAudio
 
     const int VoiceCount = 48;
     public static float MasterVolume = 0.5f;
+    // User settings (0..1), applied on top of the per-sound volume.
+    public static float SoundVolume = 1f;
+    public static float MusicVolume = 1f;
+    static float BusVolume(AudioBus bus) => bus == AudioBus.Music ? MusicVolume : SoundVolume;
+
+    public static void ApplyVolumes()
+    {
+        foreach (var voice in _voices)
+            if (!voice.Unscaled && voice.Source != null)
+                voice.Source.volume = voice.BaseVolume * BusVolume(voice.Bus);
+    }
     // Debug: bypass the game's Music mixer group to rule it out when music sounds odd.
     public static bool MusicOnInterfaceBus;
 
@@ -159,13 +173,15 @@ public static class EggAudio
         var source = voice.Source;
         source.outputAudioMixerGroup = bus == AudioBus.Music && !MusicOnInterfaceBus ? _musicGroup : _interfaceGroup;
         source.clip = clip;
-        source.volume = MasterVolume * volume;
         source.pitch = pitch;
         source.loop = loop;
         source.Play();
 
         voice.Hash = 0;
         voice.Bus = bus;
+        voice.Unscaled = false;
+        voice.BaseVolume = MasterVolume * volume;
+        source.volume = voice.BaseVolume * BusVolume(bus);
         voice.StartedAt = Time.realtimeSinceStartup;
         voice.StopAt = duration > 0f ? voice.StartedAt + duration : float.PositiveInfinity;
         return voice;
@@ -244,7 +260,11 @@ public static class EggAudio
         _keepAwake = PlayClip(_keepAwakeClip, 1f, 1f, loop: true, bus: AudioBus.Interface);
         // StopAll() would end it with the sound effects; the Music tag keeps it running
         if (_keepAwake != null)
+        {
             _keepAwake.Bus = AudioBus.Music;
+            _keepAwake.Unscaled = true;
+            _keepAwake.Source.volume = _keepAwake.BaseVolume;
+        }
     }
 
     public static void Update()
@@ -304,6 +324,8 @@ public static class EggAudio
 public abstract class MusicTrack
 {
     public string Name;
+    // Per-track gain before the user's music volume.
+    public float Volume = 1f;
     // ImGui time at which audio actually started (0 while loading); used for beat sync.
     public double PlaybackStart;
     public abstract bool IsPlaying { get; }
@@ -332,7 +354,6 @@ public abstract class MusicTrack
 public class ClipTrack : MusicTrack
 {
     readonly AudioClip _clip;
-    readonly float _volume;
     readonly bool _loop;
     EggAudio.Voice _voice;
 
@@ -340,7 +361,7 @@ public class ClipTrack : MusicTrack
     {
         Name = name;
         _clip = clip;
-        _volume = volume;
+        Volume = volume;
         _loop = loop;
     }
 
@@ -373,7 +394,7 @@ public class ClipTrack : MusicTrack
 
     void Begin()
     {
-        _voice = EggAudio.PlayClip(_clip, _volume, 1f, loop: _loop, bus: AudioBus.Music);
+        _voice = EggAudio.PlayClip(_clip, Volume, 1f, loop: _loop, bus: AudioBus.Music);
         PlaybackStart = ImGui.GetTime();
     }
 
@@ -388,7 +409,6 @@ public class ClipTrack : MusicTrack
 public class FileTrack : MusicTrack
 {
     readonly string _path;
-    readonly float _volume;
     AudioClip _clip;
     bool _loading;
     bool _starting;
@@ -399,7 +419,7 @@ public class FileTrack : MusicTrack
     {
         Name = Path.GetFileNameWithoutExtension(path);
         _path = path;
-        _volume = volume;
+        Volume = volume;
     }
 
     public override bool IsPlaying => _starting || (_voice != null && _voice.IsPlaying);
@@ -463,7 +483,7 @@ public class FileTrack : MusicTrack
 
     void Begin()
     {
-        _voice = EggAudio.PlayClip(_clip, _volume, 1f, loop: false, bus: AudioBus.Music);
+        _voice = EggAudio.PlayClip(_clip, Volume, 1f, loop: false, bus: AudioBus.Music);
         PlaybackStart = ImGui.GetTime();
         L.Debug($"Music '{Name}' started (clip state {_clip.loadState}, {_clip.length:F0}s)");
         CheckStart(_voice).Forget();
