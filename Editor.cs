@@ -1330,7 +1330,17 @@ public class EditorTab
     }
 
     private List<string> _editorIds = new List<string>();
+    private float _splitRatio = 0.5f;
 
+    private void DrawEditor(int i, Vector2 pos, Vector2 size)
+    {
+        if (_editorIds.Count <= i)
+            _editorIds.Add($"##editorpane{_editorIds.Count}");
+        Editors[i].Update();
+        Editors[i].Draw(pos, size, _editorIds[i]);
+    }
+
+    // assumes at most two editors
     public void Draw(float availHeight)
     {
         using var _ = new ScopedFont(ImGui.GetIO().Fonts.Fonts[0]);
@@ -1338,20 +1348,26 @@ public class EditorTab
         var p0 = ImGui.GetCursorScreenPos();
         var avail = ImGui.GetContentRegionAvail();
         var spacing = ImGui.GetStyle().ItemSpacing.x;
-        avail.y = availHeight;
-        avail.x = avail.x / n - spacing * (n - 1) / n;
-        for (var i = 0; i < n; i++)
+        var width = avail.x - spacing * (n - 1);
+        var leftWidth = n == 1 ? width : Mathf.Round(width * _splitRatio);
+
+        DrawEditor(0, p0, new Vector2(leftWidth, availHeight));
+        if (n > 1)
         {
-            if (_editorIds.Count <= i)
-                _editorIds.Add($"##editorpane{_editorIds.Count}");
-            var editor = Editors[i];
-            editor.Update();
-            editor.Draw(p0, avail, _editorIds[i]);
-            if (i < n - 1)
-                ImGui.SameLine();
-            p0.x += avail.x + spacing;
+            var splitterPos = new Vector2(p0.x + leftWidth, p0.y);
+            ImGui.SetCursorScreenPos(splitterPos);
+            ImGui.InvisibleButton("##splitter", new Vector2(spacing, availHeight));
+            var active = ImGui.IsItemActive();
+            var hovered = ImGui.IsItemHovered();
+            if (hovered || active)
+                ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeEW);
+            if (active && width > 0)
+                _splitRatio = Mathf.Clamp((ImGui.GetMousePos().x - p0.x - spacing / 2) / width, 0.1f, 0.9f);
+            var lineTop = splitterPos + spacing / 2 * Vector2.right;
+            ImGui.GetWindowDrawList().AddLine(lineTop, lineTop + availHeight * Vector2.up, ImGui.GetColorU32(ImGuiCol.SeparatorActive), hovered || active ? 3f : 1f);
+            DrawEditor(1, new Vector2(splitterPos.x + spacing, p0.y), new Vector2(width - leftWidth, availHeight));
         }
-        ImGui.SetCursorScreenPos(new Vector2(p0.x, p0.y + avail.y + ImGui.GetStyle().ItemSpacing.y));
+        ImGui.SetCursorScreenPos(new Vector2(p0.x + avail.x + spacing, p0.y + availHeight + ImGui.GetStyle().ItemSpacing.y));
         VersionWindow?.Draw();
     }
 }
