@@ -4,7 +4,7 @@
   <Author>aproposmath</Author>
   <ModID>com.github.aproposmath.StationeersIC10Editor</ModID>
   <WorkshopHandle>3592775931</WorkshopHandle>
-  <Version>1.0.0</Version>
+  <Version>1.0.2</Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
 
@@ -34,9 +34,10 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        1.0.1:
+        1.0.2:
         
-        - Easter egg improvements (thx @JacksonTheMaster and @VFox32)
+        - Allow underscores as digit separators in hexadecimal numbers (e.g. $FF_FF, thx @AndrielChaoti for reporting)
+        - Resizable editor panes in side-by-side view (for IC10 compilers like Slang, PyTrapIC)
 
   </ChangeLog>
   <Tags>
