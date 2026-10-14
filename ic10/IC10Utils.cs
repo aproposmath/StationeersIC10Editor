@@ -209,7 +209,7 @@ public class IC10Utils
         value = double.NaN;
         if (text.StartsWith("$"))
         {
-            if (Int64.TryParse(text.Substring(1), System.Globalization.NumberStyles.HexNumber, null, out long hexValue))
+            if (Int64.TryParse(text.Substring(1).Replace("_", ""), System.Globalization.NumberStyles.HexNumber, null, out long hexValue))
             {
                 value = (double)hexValue;
                 return true;
